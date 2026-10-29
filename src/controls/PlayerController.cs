@@ -7,13 +7,14 @@ using Stride.Animations;
 namespace DiscFaithful
 {
     /// <summary>
-    /// Controlli giocatore 3D + Xbox controller + animazioni.
-    /// Regole 100% fedeli all'originale.
+    /// Controlli giocatore 3D + Xbox pad.
+    /// Movimento vincolato alle piastrelle vive, lancio, parata, vita, caduta.
     /// </summary>
     public class PlayerController : SyncScript
     {
         public Platform MyPlatform;
         public Disc CurrentDisc;
+
         public int MaxLife = 5;
         public int CurrentLife;
 
@@ -24,32 +25,32 @@ namespace DiscFaithful
         public float RotationSpeed = 12f;
         public float StickDeadzone = 0.18f;
         public float FloorClampRadius = 1.15f;
+        public float ThrowCooldownSeconds = 0.45f;
 
         public int PlayerIndex = 0;
 
         public AnimationComponent Anim;
-        public string AnimIdle    = "Idle";
-        public string AnimWalk    = "Walk";
-        public string AnimThrow   = "Throw";
-        public string AnimBlock   = "Block";
-        public string AnimHit     = "Hit";
-        public string AnimFall    = "Fall";
+        public string AnimIdle = "Idle";
+        public string AnimWalk = "Walk";
+        public string AnimThrow = "Throw";
+        public string AnimBlock = "Block";
+        public string AnimHit = "Hit";
+        public string AnimFall = "Fall";
         public string AnimVictory = "Victory";
-
-        private string currentAnim = "";
-        private float throwCooldown;
 
         public event Action<PlayerController> OnDeath;
         public event Action<PlayerController> OnFell;
+
+        private string currentAnim = "";
+        private float throwCooldown;
 
         public override void Start()
         {
             CurrentLife = MaxLife;
             IsDead = false;
 
-            if (Anim == null)
-                Anim = Entity.Get<AnimationComponent>()
-                    ?? Entity.FindChild("Model")?.Get<AnimationComponent>();
+            Anim ??= Entity.Get<AnimationComponent>()
+                ?? Entity.FindChild("Model")?.Get<AnimationComponent>();
 
             PlayAnim(AnimIdle, true);
         }
@@ -85,7 +86,7 @@ namespace DiscFaithful
             else
             {
                 float mag = (stick.Length() - StickDeadzone) / (1f - StickDeadzone);
-                stick = Vector2.Normalize(stick) * mag;
+                stick = Vector2.Normalize(stick) * Math.Clamp(mag, 0f, 1f);
             }
 
             Vector3 move = new Vector3(stick.X, 0f, -stick.Y);
@@ -118,7 +119,10 @@ namespace DiscFaithful
             if (offset.Length() > FloorClampRadius)
             {
                 offset = Vector3.Normalize(offset) * FloorClampRadius;
-                Entity.Transform.Position = new Vector3(tilePos.X + offset.X, pos.Y, tilePos.Z + offset.Z);
+                Entity.Transform.Position = new Vector3(
+                    tilePos.X + offset.X,
+                    pos.Y,
+                    tilePos.Z + offset.Z);
             }
         }
 
@@ -128,23 +132,23 @@ namespace DiscFaithful
                 return;
 
             var pad = GetPad();
-            bool throwPressed = pad.RightTrigger > 0.55f || pad.IsButtonPressed(GamePadButton.A);
+            bool throwPressed = pad.RightTrigger > 0.55f
+                              || pad.IsButtonPressed(GamePadButton.A);
 
-            if (throwPressed)
+            if (!throwPressed) return;
+
+            Vector3 dir = Entity.Transform.WorldMatrix.Forward;
+
+            Vector2 aim = pad.RightThumb;
+            if (aim.Length() > StickDeadzone)
             {
-                Vector3 dir = Entity.Transform.WorldMatrix.Forward;
-
-                Vector2 aim = pad.RightThumb;
-                if (aim.Length() > StickDeadzone)
-                {
-                    dir = new Vector3(aim.X, 0f, -aim.Y);
-                    dir = Vector3.Normalize(dir);
-                }
-
-                CurrentDisc.Throw(dir);
-                PlayAnim(AnimThrow, false);
-                throwCooldown = 0.45f;
+                dir = Vector3.Normalize(new Vector3(aim.X, 0f, -aim.Y));
             }
+
+            CurrentDisc.Throw(dir);
+            CurrentDisc = null; // non più in mano dopo il lancio
+            PlayAnim(AnimThrow, false);
+            throwCooldown = ThrowCooldownSeconds;
         }
 
         private void HandleBlock()
@@ -157,13 +161,27 @@ namespace DiscFaithful
 
         private void CheckFall()
         {
-            if (MyPlatform != null && MyPlatform.HasNoFloorLeft())
+            if (MyPlatform == null) return;
+
+            // Caduta se non resta più pavimento, oppure se la piastrella sotto è distrutta
+            if (MyPlatform.HasNoFloorLeft())
             {
-                IsDead = true;
-                PlayAnim(AnimFall, false);
-                OnFell?.Invoke(this);
-                Enabled = false;
+                DieFromFall();
+                return;
             }
+
+            var under = MyPlatform.GetClosestAliveFloor(Entity.Transform.Position);
+            if (under == null)
+                DieFromFall();
+        }
+
+        private void DieFromFall()
+        {
+            if (IsDead) return;
+            IsDead = true;
+            PlayAnim(AnimFall, false);
+            OnFell?.Invoke(this);
+            Enabled = false;
         }
 
         private void UpdateAnimationState()
@@ -176,9 +194,12 @@ namespace DiscFaithful
                 return;
             }
 
+            // Non sovrascrivere Throw/Hit mentre finiscono
+            if (currentAnim == AnimThrow || currentAnim == AnimHit)
+                return;
+
             var pad = GetPad();
             bool isMoving = pad.LeftThumb.Length() > StickDeadzone;
-
             PlayAnim(isMoving ? AnimWalk : AnimIdle, true);
         }
 
@@ -213,6 +234,7 @@ namespace DiscFaithful
 
         public void ReceiveDisc(Disc disc)
         {
+            if (disc == null) return;
             CurrentDisc = disc;
             disc.Catch(Entity);
         }
@@ -220,6 +242,17 @@ namespace DiscFaithful
         public void PlayVictory()
         {
             PlayAnim(AnimVictory, true);
+        }
+
+        public void ResetForRound()
+        {
+            CurrentLife = MaxLife;
+            IsDead = false;
+            IsBlocking = false;
+            CurrentDisc = null;
+            Enabled = true;
+            currentAnim = "";
+            PlayAnim(AnimIdle, true);
         }
     }
 }

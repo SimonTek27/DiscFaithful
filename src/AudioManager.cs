@@ -1,64 +1,50 @@
-using System.Collections.Generic;
-using Stride.Audio;
 using Stride.Engine;
+using Stride.Audio;
 
 namespace DiscFaithful
 {
     /// <summary>
-    /// Gestione audio semplice (mappa i sample originali: LAUNCH, IMPACT, DESDALLE, MORT, VICTOIRE…).
+    /// Wrapper audio – assegna i Sound estratti dall'ADF (launch, impact, …).
     /// </summary>
     public class AudioManager : StartupScript
     {
-        public static AudioManager Instance { get; private set; }
+        public Sound Launch;
+        public Sound Impact;
+        public Sound TileDestroy;
+        public Sound HitPlayer;
+        public Sound Death;
+        public Sound Victory;
+        public Sound Gong;
+        public Sound Block;
 
-        public Sound SndLaunch;
-        public Sound SndImpact;
-        public Sound SndDesDalle;
-        public Sound SndHitPlayer;
-        public Sound SndMort;
-        public Sound SndVictoire;
-        public Sound SndGong;
-        public Sound SndParade;
-
-        private readonly Dictionary<string, Sound> map = new();
+        private SoundInstance _launch;
+        private SoundInstance _impact;
+        private SoundInstance _tileDestroy;
+        private SoundInstance _hitPlayer;
+        private SoundInstance _death;
+        private SoundInstance _victory;
+        private SoundInstance _gong;
+        private SoundInstance _block;
 
         public override void Start()
         {
-            Instance = this;
-
-            Register("Launch", SndLaunch);
-            Register("Impact", SndImpact);
-            Register("DesDalle", SndDesDalle);
-            Register("HitPlayer", SndHitPlayer);
-            Register("Mort", SndMort);
-            Register("Victoire", SndVictoire);
-            Register("Gong", SndGong);
-            Register("Parade", SndParade);
+            _launch = Launch?.CreateInstance();
+            _impact = Impact?.CreateInstance();
+            _tileDestroy = TileDestroy?.CreateInstance();
+            _hitPlayer = HitPlayer?.CreateInstance();
+            _death = Death?.CreateInstance();
+            _victory = Victory?.CreateInstance();
+            _gong = Gong?.CreateInstance();
+            _block = Block?.CreateInstance();
         }
 
-        private void Register(string key, Sound snd)
-        {
-            if (snd != null)
-                map[key] = snd;
-        }
-
-        public void Play(string key, float volume = 1f)
-        {
-            if (!map.TryGetValue(key, out var snd) || snd == null)
-                return;
-
-            var instance = snd.CreateInstance();
-            instance.Volume = volume;
-            instance.Play();
-        }
-
-        public void PlayLaunch()    => Play("Launch");
-        public void PlayImpact()    => Play("Impact");
-        public void PlayDesDalle()  => Play("DesDalle");
-        public void PlayHitPlayer() => Play("HitPlayer");
-        public void PlayMort()      => Play("Mort");
-        public void PlayVictoire()  => Play("Victoire");
-        public void PlayGong()      => Play("Gong");
-        public void PlayParade()    => Play("Parade");
+        public void PlayLaunch() => _launch?.Play();
+        public void PlayImpact() => _impact?.Play();
+        public void PlayTileDestroy() => _tileDestroy?.Play();
+        public void PlayHitPlayer() => _hitPlayer?.Play();
+        public void PlayDeath() => _death?.Play();
+        public void PlayVictory() => _victory?.Play();
+        public void PlayGong() => _gong?.Play();
+        public void PlayBlock() => _block?.Play();
     }
 }

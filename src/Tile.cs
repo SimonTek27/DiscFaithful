@@ -8,9 +8,9 @@ using Stride.Animations;
 namespace DiscFaithful
 {
     /// <summary>
-    /// Piastrella 3D (Floor o Wall).
-    /// Fedeltà 100% all'originale: solo le Wall ricevono danno.
-    /// Quando HitsRemaining arriva a 0 spariscono wall + floor collegata.
+    /// Piastrella 3D (Floor o Wall) – fedele all'originale.
+    /// Solo le Wall ricevono colpi. A 0 hits spariscono wall + floor collegata.
+    /// Simboli: Pentagon → Square → Triangle → Equals → Circle → destroy.
     /// </summary>
     public class Tile : SyncScript
     {
@@ -18,7 +18,7 @@ namespace DiscFaithful
 
         public TileType Type = TileType.Floor;
 
-        /// <summary> 0-7 (riga*4 + colonna). Deve essere identico tra floor e wall corrispondenti. </summary>
+        /// <summary>0-7 (riga*4 + colonna). Identico tra floor e wall corrispondenti.</summary>
         public int Index = 0;
 
         public int HitsRemaining = 0;
@@ -26,7 +26,6 @@ namespace DiscFaithful
 
         public Tile LinkedTile;
 
-        // Visual & Animation
         public AnimationComponent Anim;
         public string AnimHit = "Hit";
         public string AnimDestroy = "Destroy";
@@ -43,13 +42,10 @@ namespace DiscFaithful
             if (Type == TileType.Floor)
                 HitsRemaining = 0;
 
-            if (Anim == null)
-                Anim = Entity.Get<AnimationComponent>()
-                    ?? Entity.FindChild("Model")?.Get<AnimationComponent>();
+            Anim ??= Entity.Get<AnimationComponent>()
+                ?? Entity.FindChild("Model")?.Get<AnimationComponent>();
 
-            if (SymbolRoot == null)
-                SymbolRoot = Entity.FindChild("Symbol");
-
+            SymbolRoot ??= Entity.FindChild("Symbol");
             UpdateSymbolVisual();
         }
 
@@ -82,6 +78,7 @@ namespace DiscFaithful
             if (IsDestroyed) return;
             IsDestroyed = true;
 
+            // Disabilita collider fisici (pavimento sparisce → rischio caduta)
             var staticCol = Entity.Get<StaticColliderComponent>();
             if (staticCol != null) staticCol.Enabled = false;
 
@@ -98,10 +95,28 @@ namespace DiscFaithful
                 ScaleDownAndDisable(0.55f);
             }
 
+            // Distrugge anche la piastrella collegata (floor ↔ wall)
             if (LinkedTile != null && !LinkedTile.IsDestroyed)
                 LinkedTile.DestroyTile();
 
             OnDestroyed?.Invoke(this);
+        }
+
+        /// <summary>Ripristina la piastrella per un nuovo round.</summary>
+        public void ResetTile(int hits)
+        {
+            IsDestroyed = false;
+            HitsRemaining = Type == TileType.Wall ? hits : 0;
+
+            var staticCol = Entity.Get<StaticColliderComponent>();
+            if (staticCol != null) staticCol.Enabled = true;
+
+            var rb = Entity.Get<RigidbodyComponent>();
+            if (rb != null) rb.Enabled = true;
+
+            Entity.EnableAll(true, true);
+            Entity.Transform.Scale = Vector3.One;
+            UpdateSymbolVisual();
         }
 
         private async void DelayedDisable(float seconds)
@@ -115,14 +130,15 @@ namespace DiscFaithful
         {
             Vector3 start = Entity.Transform.Scale;
             float t = 0f;
-            while (t < duration)
+            while (t < duration && Entity != null)
             {
                 t += (float)Game.UpdateTime.Elapsed.TotalSeconds;
                 float k = 1f - Math.Clamp(t / duration, 0f, 1f);
                 Entity.Transform.Scale = start * k;
                 await Script.NextFrame();
             }
-            Entity.EnableAll(false, true);
+            if (Entity != null)
+                Entity.EnableAll(false, true);
         }
 
         private void UpdateSymbolVisual()

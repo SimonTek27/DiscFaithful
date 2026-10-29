@@ -1,79 +1,68 @@
-using System;
 using Stride.Core.Mathematics;
 using Stride.Engine;
 
 namespace DiscFaithful
 {
     /// <summary>
-    /// Camera fissa stile originale Disc (1990) ma in 3D.
+    /// Camera fissa/cinematica sull'arena (vista laterale/3/4 stile sportivo).
+    /// Opzionale follow leggero del disco in volo.
     /// </summary>
     public class CameraController : SyncScript
     {
-        public Entity TargetCenter;
-        public Platform Platform1;
-        public Platform Platform2;
+        public Entity ArenaCenter;
+        public Entity FollowDisc;           // opzionale: disco da inseguire
+        public Vector3 Offset = new Vector3(0f, 12f, 18f);
+        public float FollowLerp = 3f;
+        public bool FollowActiveDisc = false;
 
-        public Vector3 Offset = new Vector3(0f, 9.5f, -11.0f);
-        public float LookAtHeight = 1.2f;
-        public float SmoothSpeed = 4.0f;
-
-        public bool EnableBreathing = false;
-        public float BreathAmplitude = 0.08f;
-        public float BreathSpeed = 0.6f;
-
-        private Vector3 currentPos;
-        private float breathTimer;
+        private Vector3 targetPos;
 
         public override void Start()
         {
-            UpdateCamera(1f);
-            currentPos = Entity.Transform.Position;
+            if (ArenaCenter != null)
+                targetPos = ArenaCenter.Transform.WorldMatrix.TranslationVector + Offset;
+            else
+                targetPos = Entity.Transform.Position;
+
+            Entity.Transform.Position = targetPos;
+            LookAtArena();
         }
 
         public override void Update()
         {
-            UpdateCamera((float)Game.UpdateTime.Elapsed.TotalSeconds);
-        }
+            Vector3 desired = targetPos;
 
-        private void UpdateCamera(float dt)
-        {
-            Vector3 center = GetArenaCenter();
-            Vector3 desired = center + Offset;
-
-            if (EnableBreathing)
+            if (FollowActiveDisc && FollowDisc != null)
             {
-                breathTimer += dt * BreathSpeed;
-                desired.Y += MathF.Sin(breathTimer) * BreathAmplitude;
+                var discPos = FollowDisc.Transform.WorldMatrix.TranslationVector;
+                desired = Vector3.Lerp(targetPos, discPos + Offset, 0.25f);
+            }
+            else if (ArenaCenter != null)
+            {
+                desired = ArenaCenter.Transform.WorldMatrix.TranslationVector + Offset;
             }
 
-            currentPos = Vector3.Lerp(currentPos, desired, Math.Clamp(SmoothSpeed * dt, 0f, 1f));
-            Entity.Transform.Position = currentPos;
+            float dt = (float)Game.UpdateTime.Elapsed.TotalSeconds;
+            Entity.Transform.Position = Vector3.Lerp(
+                Entity.Transform.Position,
+                desired,
+                Math.Clamp(FollowLerp * dt, 0f, 1f));
 
-            Vector3 lookAt = center + new Vector3(0f, LookAtHeight, 0f);
-            Entity.Transform.LookAt(lookAt, Vector3.UnitY);
+            LookAtArena();
         }
 
-        private Vector3 GetArenaCenter()
+        private void LookAtArena()
         {
-            if (TargetCenter != null)
-                return TargetCenter.Transform.WorldMatrix.TranslationVector;
+            Vector3 lookAt = ArenaCenter != null
+                ? ArenaCenter.Transform.WorldMatrix.TranslationVector
+                : Vector3.Zero;
 
-            Vector3 p1 = Platform1?.Entity.Transform.WorldMatrix.TranslationVector ?? Vector3.Zero;
-            Vector3 p2 = Platform2?.Entity.Transform.WorldMatrix.TranslationVector ?? Vector3.Zero;
-            return (p1 + p2) * 0.5f;
-        }
+            var forward = lookAt - Entity.Transform.Position;
+            if (forward.LengthSquared() < 1e-4f) return;
 
-        public void FocusOn(Entity target, float height = 6f, float distance = 7f)
-        {
-            if (target == null) return;
-            Offset = new Vector3(0f, height, -distance);
-            TargetCenter = target;
-        }
-
-        public void ResetToArenaView()
-        {
-            Offset = new Vector3(0f, 9.5f, -11.0f);
-            TargetCenter = null;
+            Entity.Transform.Rotation = Quaternion.LookRotation(
+                Vector3.Normalize(forward),
+                Vector3.UnitY);
         }
     }
 }

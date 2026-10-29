@@ -7,7 +7,7 @@ using Stride.Engine;
 namespace DiscFaithful
 {
     /// <summary>
-    /// GameManager completo: livelli, multi-disco, score, reset round, eventi.
+    /// Orchestratore match: livelli, multi-disco, score, reset round, vittoria.
     /// </summary>
     public class GameManager : SyncScript
     {
@@ -16,6 +16,7 @@ namespace DiscFaithful
         public Platform Platform1;
         public Platform Platform2;
         public Prefab DiscPrefab;
+        public AudioManager Audio;
 
         public List<Disc> ActiveDiscs = new();
 
@@ -44,12 +45,12 @@ namespace DiscFaithful
             if (Player1 != null)
             {
                 Player1.OnDeath += OnPlayerDeath;
-                Player1.OnFell  += OnPlayerFell;
+                Player1.OnFell += OnPlayerFell;
             }
             if (Player2 != null)
             {
                 Player2.OnDeath += OnPlayerDeath;
-                Player2.OnFell  += OnPlayerFell;
+                Player2.OnFell += OnPlayerFell;
             }
         }
 
@@ -85,8 +86,8 @@ namespace DiscFaithful
             RoundOver = false;
             MatchInProgress = true;
 
-            ResetPlayer(Player1);
-            ResetPlayer(Player2);
+            Player1?.ResetForRound();
+            Player2?.ResetForRound();
 
             Platform1?.InitializeHits();
             Platform2?.InitializeHits();
@@ -94,22 +95,15 @@ namespace DiscFaithful
             ClearAllDiscs();
             SpawnInitialDiscs();
 
+            Audio?.PlayGong();
             OnRoundReset?.Invoke();
             Log.Info($"[GameManager] Round start – Level {CurrentLevel}, MaxDiscs {MaxDiscs}");
-        }
-
-        private void ResetPlayer(PlayerController p)
-        {
-            if (p == null) return;
-            p.CurrentLife = p.MaxLife;
-            p.IsDead = false;
-            p.Enabled = true;
-            p.CurrentDisc = null;
         }
 
         private void SpawnInitialDiscs()
         {
             if (DiscPrefab == null) return;
+
             int toSpawn = Math.Min(MaxDiscs, 4);
             for (int i = 0; i < toSpawn; i++)
             {
@@ -131,10 +125,11 @@ namespace DiscFaithful
 
             var disc = discEntity.Get<Disc>() ?? discEntity.GetOrCreate<Disc>();
 
+            disc.OnHitPlayer += OnDiscHitPlayer;
+            disc.OnHitWallTile += OnDiscHitWall;
+
             disc.Catch(owner.Entity);
             owner.ReceiveDisc(disc);
-
-            disc.OnHitPlayer += OnDiscHitPlayer;
 
             ActiveDiscs.Add(disc);
             return disc;
@@ -176,6 +171,7 @@ namespace DiscFaithful
             else if (winner == Player2) ScoreP2++;
 
             winner?.PlayVictory();
+            Audio?.PlayVictory();
 
             Log.Info($"[GameManager] Round over – Winner: {winner?.Entity.Name} ({reason})  Score {ScoreP1}-{ScoreP2}");
             OnMatchEnded?.Invoke(winner, reason);
@@ -184,8 +180,21 @@ namespace DiscFaithful
         public void OnDiscHitPlayer(Disc disc, Entity hitEntity)
         {
             var player = hitEntity.Get<PlayerController>();
-            if (player != null && !player.IsDead)
-                player.TakeDamage(1);
+            if (player == null || player.IsDead) return;
+
+            if (player.IsBlocking)
+            {
+                Audio?.PlayBlock();
+                return;
+            }
+
+            player.TakeDamage(1);
+            Audio?.PlayHitPlayer();
+        }
+
+        private void OnDiscHitWall(Disc disc, Tile tile)
+        {
+            Audio?.PlayTileDestroy();
         }
 
         public void AdvanceLevel()

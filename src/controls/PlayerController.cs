@@ -146,7 +146,7 @@ namespace DiscFaithful
             }
 
             CurrentDisc.Throw(dir);
-            CurrentDisc = null; // non più in mano dopo il lancio
+            CurrentDisc = null;
             PlayAnim(AnimThrow, false);
             throwCooldown = ThrowCooldownSeconds;
         }
@@ -163,7 +163,6 @@ namespace DiscFaithful
         {
             if (MyPlatform == null) return;
 
-            // Caduta se non resta più pavimento, oppure se la piastrella sotto è distrutta
             if (MyPlatform.HasNoFloorLeft())
             {
                 DieFromFall();
@@ -194,7 +193,6 @@ namespace DiscFaithful
                 return;
             }
 
-            // Non sovrascrivere Throw/Hit mentre finiscono
             if (currentAnim == AnimThrow || currentAnim == AnimHit)
                 return;
 
@@ -230,6 +228,12 @@ namespace DiscFaithful
                 OnDeath?.Invoke(this);
                 Enabled = false;
             }
+        }
+
+        /// <summary>Solo feedback visuale (Training con vita infinita).</summary>
+        public void PlayHitFeedback()
+        {
+            PlayAnim(AnimHit, false);
         }
 
         public void ReceiveDisc(Disc disc)

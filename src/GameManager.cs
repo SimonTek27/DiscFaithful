@@ -7,7 +7,8 @@ using Stride.Engine;
 namespace DiscFaithful
 {
     /// <summary>
-    /// Orchestratore match: livelli, multi-disco, score, reset round, vittoria.
+    /// Orchestratore match + modalità:
+    /// TRAINING | SINGLE MATCH | TOURNAMENT | CHAMPIONSHIP
     /// </summary>
     public class GameManager : SyncScript
     {
@@ -20,25 +21,75 @@ namespace DiscFaithful
 
         public List<Disc> ActiveDiscs = new();
 
+        // ---- Modalità ----
+        public GameModeType SelectedMode = GameModeType.SingleMatch;
+        public GameModeConfig Config { get; private set; }
+
         public int CurrentLevel = 1;
         public int MaxDiscs = 1;
-        public int WinsToChampion = 3;
 
         public int ScoreP1 { get; private set; }
         public int ScoreP2 { get; private set; }
 
+        /// <summary>Match vinti nel campionato (solo Championship).</summary>
+        public int ChampionshipWinsP1 { get; private set; }
+        public int ChampionshipWinsP2 { get; private set; }
+
         public bool MatchInProgress { get; private set; }
         public bool RoundOver { get; private set; }
+        public bool ModeFinished { get; private set; }
 
         public event Action<PlayerController, string> OnMatchEnded;
         public event Action OnRoundReset;
+        public event Action<GameModeType, PlayerController> OnModeCompleted;
+        public event Action<GameModeConfig> OnModeChanged;
 
         public override void Start()
         {
-            ApplyLevelSettings();
+            SetMode(SelectedMode);
             SubscribePlayers();
             StartRound();
         }
+
+        // =========================================================
+        //  MODALITÀ
+        // =========================================================
+
+        public void SetMode(GameModeType mode)
+        {
+            SelectedMode = mode;
+            Config = GameModeConfig.For(mode);
+
+            CurrentLevel = Config.StartingLevel;
+            ScoreP1 = 0;
+            ScoreP2 = 0;
+            ChampionshipWinsP1 = 0;
+            ChampionshipWinsP2 = 0;
+            ModeFinished = false;
+
+            if (Player1 != null) Player1.MaxLife = Config.StartingLife;
+            if (Player2 != null) Player2.MaxLife = Config.StartingLife;
+
+            ApplyLevelSettings();
+            OnModeChanged?.Invoke(Config);
+
+            Log.Info($"[GameManager] Mode → {Config.DisplayName}");
+        }
+
+        public void StartTraining() => BeginMode(GameModeType.Training);
+        public void StartSingleMatch() => BeginMode(GameModeType.SingleMatch);
+        public void StartTournament() => BeginMode(GameModeType.Tournament);
+        public void StartChampionship() => BeginMode(GameModeType.Championship);
+
+        private void BeginMode(GameModeType mode)
+        {
+            SetMode(mode);
+            StartRound();
+        }
+
+        // =========================================================
+        //  ROUND / MATCH
+        // =========================================================
 
         private void SubscribePlayers()
         {
@@ -83,11 +134,21 @@ namespace DiscFaithful
 
         public void StartRound()
         {
+            if (ModeFinished) return;
+
             RoundOver = false;
             MatchInProgress = true;
 
-            Player1?.ResetForRound();
-            Player2?.ResetForRound();
+            if (Player1 != null)
+            {
+                Player1.MaxLife = Config.InfiniteLife ? 99 : Config.StartingLife;
+                Player1.ResetForRound();
+            }
+            if (Player2 != null)
+            {
+                Player2.MaxLife = Config.InfiniteLife ? 99 : Config.StartingLife;
+                Player2.ResetForRound();
+            }
 
             Platform1?.InitializeHits();
             Platform2?.InitializeHits();
@@ -97,7 +158,7 @@ namespace DiscFaithful
 
             Audio?.PlayGong();
             OnRoundReset?.Invoke();
-            Log.Info($"[GameManager] Round start – Level {CurrentLevel}, MaxDiscs {MaxDiscs}");
+            Log.Info($"[GameManager] [{Config.DisplayName}] Round – Lv{CurrentLevel} Discs:{MaxDiscs} Score {ScoreP1}-{ScoreP2}");
         }
 
         private void SpawnInitialDiscs()
@@ -150,14 +211,32 @@ namespace DiscFaithful
 
         private void OnPlayerDeath(PlayerController p)
         {
-            if (RoundOver) return;
+            if (RoundOver || ModeFinished) return;
+
+            // Training: non finisce il round, solo reset vita
+            if (Config.Mode == GameModeType.Training)
+            {
+                p.ResetForRound();
+                Audio?.PlayDeath();
+                return;
+            }
+
             var winner = (p == Player1) ? Player2 : Player1;
             EndRound(winner, "Life depleted");
         }
 
         private void OnPlayerFell(PlayerController p)
         {
-            if (RoundOver) return;
+            if (RoundOver || ModeFinished) return;
+
+            if (Config.Mode == GameModeType.Training)
+            {
+                p.ResetForRound();
+                Platform1?.InitializeHits();
+                Platform2?.InitializeHits();
+                return;
+            }
+
             var winner = (p == Player1) ? Player2 : Player1;
             EndRound(winner, "Opponent fell");
         }
@@ -167,15 +246,89 @@ namespace DiscFaithful
             RoundOver = true;
             MatchInProgress = false;
 
-            if (winner == Player1) ScoreP1++;
-            else if (winner == Player2) ScoreP2++;
+            if (Config.TrackScore)
+            {
+                if (winner == Player1) ScoreP1++;
+                else if (winner == Player2) ScoreP2++;
+            }
 
             winner?.PlayVictory();
             Audio?.PlayVictory();
 
-            Log.Info($"[GameManager] Round over – Winner: {winner?.Entity.Name} ({reason})  Score {ScoreP1}-{ScoreP2}");
+            Log.Info($"[GameManager] Round over – {winner?.Entity.Name} ({reason})  {ScoreP1}-{ScoreP2}");
             OnMatchEnded?.Invoke(winner, reason);
+
+            // Controlla fine modalità
+            CheckModeProgress(winner);
         }
+
+        private void CheckModeProgress(PlayerController lastWinner)
+        {
+            int needed = Config.WinsToChampion;
+
+            // TRAINING: non finisce mai da solo
+            if (Config.Mode == GameModeType.Training)
+                return;
+
+            // SINGLE MATCH / TOURNAMENT / CHAMPIONSHIP: score round
+            if (ScoreP1 >= needed || ScoreP2 >= needed)
+            {
+                var champ = ScoreP1 >= needed ? Player1 : Player2;
+
+                if (Config.Mode == GameModeType.Championship)
+                {
+                    // Un "match" del campionato è finito → aggiorna classifica campionato
+                    if (champ == Player1) ChampionshipWinsP1++;
+                    else ChampionshipWinsP2++;
+
+                    Log.Info($"[GameManager] Championship match won by {champ?.Entity.Name}  Series {ChampionshipWinsP1}-{ChampionshipWinsP2}");
+
+                    // Campionato finisce a 3 match vinti (best of 5 series)
+                    if (ChampionshipWinsP1 >= 3 || ChampionshipWinsP2 >= 3)
+                    {
+                        FinishMode(champ);
+                        return;
+                    }
+
+                    // Prossimo match del campionato: reset score round, forse avanza livello
+                    ScoreP1 = 0;
+                    ScoreP2 = 0;
+                    if (Config.AutoAdvanceLevel && CurrentLevel < Config.MaxLevel)
+                        CurrentLevel++;
+                    ApplyLevelSettings();
+                    return;
+                }
+
+                // SingleMatch o Tournament: fine modalità
+                if (Config.Mode == GameModeType.Tournament && Config.AutoAdvanceLevel)
+                {
+                    // Torneo: se non sei all'ultimo livello, avanza e continua
+                    if (CurrentLevel < Config.MaxLevel)
+                    {
+                        CurrentLevel++;
+                        ScoreP1 = 0;
+                        ScoreP2 = 0;
+                        ApplyLevelSettings();
+                        Log.Info($"[GameManager] Tournament advance → Level {CurrentLevel}");
+                        return;
+                    }
+                }
+
+                FinishMode(champ);
+            }
+        }
+
+        private void FinishMode(PlayerController champion)
+        {
+            ModeFinished = true;
+            MatchInProgress = false;
+            Log.Info($"[GameManager] {Config.DisplayName} COMPLETE – Champion: {champion?.Entity.Name}");
+            OnModeCompleted?.Invoke(Config.Mode, champion);
+        }
+
+        // =========================================================
+        //  COMBATTIMENTO
+        // =========================================================
 
         public void OnDiscHitPlayer(Disc disc, Entity hitEntity)
         {
@@ -188,6 +341,14 @@ namespace DiscFaithful
                 return;
             }
 
+            // Training con vita infinita: danno solo visuale
+            if (Config.InfiniteLife)
+            {
+                player.PlayAnimPublicHit();
+                Audio?.PlayHitPlayer();
+                return;
+            }
+
             player.TakeDamage(1);
             Audio?.PlayHitPlayer();
         }
@@ -195,30 +356,39 @@ namespace DiscFaithful
         private void OnDiscHitWall(Disc disc, Tile tile)
         {
             Audio?.PlayTileDestroy();
+            Audio?.PlayImpact();
         }
 
-        public void AdvanceLevel()
+        // =========================================================
+        //  API UI / FLOW
+        // =========================================================
+
+        public void NextRound()
         {
-            CurrentLevel++;
-            ApplyLevelSettings();
-            StartRound();
+            if (ModeFinished) return;
+            if (Config.Mode == GameModeType.Training || Config.AllowRestartMidMatch || RoundOver)
+                StartRound();
         }
 
         public void RestartMatch()
         {
+            if (!Config.AllowRestartMidMatch && MatchInProgress && !RoundOver)
+                return;
+
             ScoreP1 = 0;
             ScoreP2 = 0;
-            CurrentLevel = 1;
+            ModeFinished = false;
+            CurrentLevel = Config.StartingLevel;
             ApplyLevelSettings();
             StartRound();
         }
 
-        public void NextRound()
+        public void AdvanceLevel()
         {
-            if (ScoreP1 >= WinsToChampion || ScoreP2 >= WinsToChampion)
+            if (CurrentLevel < Config.MaxLevel)
             {
-                Log.Info("[GameManager] Match finished – Champion decided");
-                return;
+                CurrentLevel++;
+                ApplyLevelSettings();
             }
             StartRound();
         }

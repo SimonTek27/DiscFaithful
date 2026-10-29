@@ -2,7 +2,7 @@
 
 Cartella per modelli 3D, texture, audio e particelle.
 
-## Struttura consigliata
+## Struttura
 
 ```
 assets/
@@ -10,35 +10,40 @@ assets/
 ├── tiles/               ← floor + wall + simboli geometrici
 ├── disc/                ← modello del disco / frisbee
 ├── environment/         ← side walls, arena, HDRI
-├── audio/               ← sample SFX (LAUNCH, IMPACT, …)
-├── materials/           ← materiali Stride (opzionale)
-└── particles/           ← trail, distruzione (opzionale)
+├── props/               ← oggetti vari (Shield.fbx già presente)
+├── audio/               ← sample SFX
+├── materials/
+└── particles/
 ```
+
+## Props già presenti
+
+| File | Note |
+|------|------|
+| `props/Shield.fbx` | Mesh statica esportata da Blender. Materiali multipli. Da caricare manualmente su GitHub (binario). Presente nella cartella locale del progetto. |
 
 ## Cosa scaricare (tutto free / CC0)
 
 ### 1. Personaggi
 - **Quaternius Ultimate Animated Character Pack**  
   https://quaternius.com/packs/ultimatedanimatedcharacter.html  
-  → metti 2 personaggi in `assets/characters/`
+  → `assets/characters/`
 
-### 2. Piastrelle / Prototipazione
+### 2. Piastrelle
 - **Kenney Prototype Kit**  
   https://kenney.nl/assets/prototype-kit  
-  → box e texture in `assets/tiles/`
+  → `assets/tiles/`
 
 ### 3. Disco
-- Usa un **Cylinder** nativo di Stride (più veloce)  
-  oppure cerca “frisbee” / “flying disc” CC0 su Poly Pizza / Sketchfab  
+- Cylinder nativo Stride oppure modello CC0 “frisbee”  
   → `assets/disc/`
 
 ### 4. Ambiente
-- Side walls = box di Kenney  
-- HDRI scuro (opzionale): https://polyhaven.com/hdris  
+- Side walls (Kenney) + HDRI scuro (Poly Haven)  
   → `assets/environment/`
 
 ### 5. Audio
-- Sample originali dall’ADF oppure pack Kenney Audio  
+- Sample originali o Kenney Audio  
   → `assets/audio/`
 
-Vedi anche `Docs/04_FREE_3D_ASSETS.md` per i link completi.
+Vedi anche `Docs/04_FREE_3D_ASSETS.md`.

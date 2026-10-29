@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Threading.Tasks;
 using Stride.Core.Mathematics;
 using Stride.Engine;
 
@@ -18,6 +19,15 @@ namespace DiscFaithful
         public Platform Platform2;
         public Prefab DiscPrefab;
         public AudioManager Audio;
+
+        /// <summary>Avversario CPU (opzionale: se null, P2 è umano).</summary>
+        public AiOpponent OpponentAi;
+
+        /// <summary>Se false, la partita parte solo quando il menu seleziona una modalità.</summary>
+        public bool AutoStart = true;
+
+        /// <summary>Secondi tra fine round e nuovo round (più velocemente nei tornei).</summary>
+        public float RoundRestartDelay = 3f;
 
         public List<Disc> ActiveDiscs = new();
 
@@ -37,6 +47,8 @@ namespace DiscFaithful
         public bool RoundOver { get; private set; }
         public bool ModeFinished { get; private set; }
 
+        private bool restartScheduled;
+
         public event Action<PlayerController, string> OnMatchEnded;
         public event Action OnRoundReset;
         public event Action<GameModeType, PlayerController> OnModeCompleted;
@@ -46,7 +58,8 @@ namespace DiscFaithful
         {
             SetMode(SelectedMode);
             SubscribePlayers();
-            StartRound();
+            if (AutoStart)
+                StartRound();
         }
 
         public void SetMode(GameModeType mode)
@@ -110,6 +123,9 @@ namespace DiscFaithful
                 Platform2.StartingHits = hits;
                 Platform2.InitializeHits();
             }
+
+            // Difficoltà CPU scalata col livello (come nell'originale)
+            OpponentAi?.SetDifficultyFromLevel(CurrentLevel);
         }
 
         private int GetHitsForLevel(int level) => Math.Clamp(2 + (level - 1), 2, 6);
@@ -126,6 +142,7 @@ namespace DiscFaithful
         {
             if (ModeFinished) return;
 
+            restartScheduled = false;
             RoundOver = false;
             MatchInProgress = true;
 
@@ -178,6 +195,7 @@ namespace DiscFaithful
 
             disc.OnHitPlayer += OnDiscHitPlayer;
             disc.OnHitWallTile += OnDiscHitWall;
+            disc.OnOutOfBounds += OnDiscOutOfBounds;
 
             disc.Catch(owner.Entity);
             owner.ReceiveDisc(disc);
@@ -186,11 +204,44 @@ namespace DiscFaithful
             return disc;
         }
 
+        /// <summary>
+        /// Disco perso: caduto sotto l'arena o in volo troppo a lungo.
+        /// Viene restituito al suo ultimo proprietario (o a un giocatore vivo).
+        /// </summary>
+        private void OnDiscOutOfBounds(Disc disc)
+        {
+            if (disc == null || RoundOver) return;
+
+            var receiver = new[] { disc.LastOwner?.Get<PlayerController>(), Player1, Player2 }
+                .Where(p => p != null && !p.IsDead && p.CurrentDisc == null)
+                .FirstOrDefault();
+
+            if (receiver == null)
+            {
+                // Nessuno lo può riprendere (nessun giocatore vivo o tutti con un disco): lo rimuoviamo
+                disc.OnOutOfBounds -= OnDiscOutOfBounds;
+                disc.OnHitPlayer -= OnDiscHitPlayer;
+                disc.OnHitWallTile -= OnDiscHitWall;
+                ActiveDiscs.Remove(disc);
+                if (disc.Entity != null)
+                    disc.Entity.Scene = null;
+                return;
+            }
+
+            Audio?.PlayImpact();
+            disc.Catch(receiver.Entity);
+            receiver.ReceiveDisc(disc);
+        }
+
         private void ClearAllDiscs()
         {
             foreach (var d in ActiveDiscs.ToList())
             {
-                if (d?.Entity != null)
+                if (d == null) continue;
+                d.OnOutOfBounds -= OnDiscOutOfBounds;
+                d.OnHitPlayer -= OnDiscHitPlayer;
+                d.OnHitWallTile -= OnDiscHitWall;
+                if (d.Entity != null)
                     d.Entity.Scene = null;
             }
             ActiveDiscs.Clear();
@@ -248,6 +299,29 @@ namespace DiscFaithful
             OnMatchEnded?.Invoke(winner, reason);
 
             CheckModeProgress(winner);
+
+            // Round successivo automatico (il mode completed ferma il ciclo)
+            if (!ModeFinished)
+                ScheduleNextRound();
+        }
+
+        /// <summary>
+        /// Auto-restart: dopo RoundRestartDelay il round riparte da solo,
+        /// a meno che nel frattempo non sia iniziato manualmente (StartRound
+        /// azzera restartScheduled, annullando il timer pendente).
+        /// </summary>
+        private async void ScheduleNextRound()
+        {
+            if (restartScheduled || ModeFinished) return;
+            restartScheduled = true;
+
+            await Task.Delay((int)(RoundRestartDelay * 1000));
+
+            if (!restartScheduled || ModeFinished) return;
+            restartScheduled = false;
+
+            if (RoundOver)
+                StartRound();
         }
 
         private void CheckModeProgress(PlayerController lastWinner)
@@ -347,6 +421,7 @@ namespace DiscFaithful
             if (!Config.AllowRestartMidMatch && MatchInProgress && !RoundOver)
                 return;
 
+            restartScheduled = false;
             ScoreP1 = 0;
             ScoreP2 = 0;
             ModeFinished = false;

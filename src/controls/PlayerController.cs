@@ -9,6 +9,10 @@ namespace DiscFaithful
     /// <summary>
     /// Controlli giocatore 3D + Xbox pad.
     /// Movimento vincolato alle piastrelle vive, lancio, parata, vita, caduta.
+    /// Supporta 3 sorgenti di input:
+    ///   - Gamepad Xbox (default, un pad per PlayerIndex)
+    ///   - AI (AiOpponent) quando AiControlled = true
+    ///   - Tastiera come fallback se non c'è gamepad per questo PlayerIndex
     /// </summary>
     public class PlayerController : SyncScript
     {
@@ -20,6 +24,9 @@ namespace DiscFaithful
 
         public bool IsBlocking { get; private set; }
         public bool IsDead { get; set; }
+
+        /// <summary>Se true, l'input arriva da SetAiInput() (AiOpponent).</summary>
+        public bool AiControlled;
 
         public float MoveSpeed = 5.5f;
         public float RotationSpeed = 12f;
@@ -43,6 +50,12 @@ namespace DiscFaithful
 
         private string currentAnim = "";
         private float throwCooldown;
+
+        // ---- Input AI (usati solo con AiControlled) ----
+        private Vector2 aiMove;
+        private bool aiBlocking;
+        private bool aiWantThrow;
+        private Vector3 aiThrowDir = Vector3.UnitZ;
 
         public override void Start()
         {
@@ -69,6 +82,19 @@ namespace DiscFaithful
             UpdateAnimationState();
         }
 
+        /// <summary>
+        /// Input dell'IA. Chiamato ogni frame da AiOpponent.
+        /// move: direzione desiderata in coordinate stick (X = mondo X, Y = -mondo Z).
+        /// throwDir: direzione mondo di lancio.
+        /// </summary>
+        public void SetAiInput(Vector2 move, bool blocking, bool wantThrow, Vector3 throwDir)
+        {
+            aiMove = move;
+            aiBlocking = blocking;
+            aiWantThrow = wantThrow;
+            aiThrowDir = throwDir;
+        }
+
         private GamePadState GetPad()
         {
             if (Input.GamePadCount > PlayerIndex)
@@ -76,18 +102,38 @@ namespace DiscFaithful
             return default;
         }
 
+        /// <summary>True se non c'è un gamepad per questo giocatore → fallback tastiera.</summary>
+        private bool UsingKeyboard => !AiControlled && Input.GamePadCount <= PlayerIndex;
+
+        /// <summary>Stick della sorgente attiva (AI, pad o tastiera). Deadzone applicata dopo.</summary>
+        private Vector2 GetMoveStick()
+        {
+            if (AiControlled) return aiMove;
+            if (Input.GamePadCount > PlayerIndex)
+                return GetPad().LeftThumb;
+            return KeyboardStick();
+        }
+
+        private Vector2 KeyboardStick()
+        {
+            Keys up, down, left, right;
+            if (PlayerIndex == 0) { up = Keys.W; down = Keys.S; left = Keys.A; right = Keys.D; }
+            else { up = Keys.Up; down = Keys.Down; left = Keys.Left; right = Keys.Right; }
+
+            float x = (Input.IsKeyDown(right) ? 1f : 0f) - (Input.IsKeyDown(left) ? 1f : 0f);
+            float y = (Input.IsKeyDown(up) ? 1f : 0f) - (Input.IsKeyDown(down) ? 1f : 0f);
+
+            var stick = new Vector2(x, y);
+            if (stick.Length() > 1f)
+                stick = Vector2.Normalize(stick);
+            return stick;
+        }
+
         private void HandleMovement(float dt)
         {
-            var pad = GetPad();
-            Vector2 stick = pad.LeftThumb;
+            Vector2 stick = GetMoveStick();
 
-            if (stick.Length() < StickDeadzone)
-                stick = Vector2.Zero;
-            else
-            {
-                float mag = (stick.Length() - StickDeadzone) / (1f - StickDeadzone);
-                stick = Vector2.Normalize(stick) * Math.Clamp(mag, 0f, 1f);
-            }
+            stick = ApplyDeadzone(stick);
 
             Vector3 move = new Vector3(stick.X, 0f, -stick.Y);
 
@@ -102,6 +148,34 @@ namespace DiscFaithful
                 Entity.Transform.Position += move * MoveSpeed * dt;
                 ClampToAliveFloor();
             }
+
+            // Tastiera: rotazione di mira dedicata (senza dover camminare)
+            if (UsingKeyboard)
+                HandleKeyboardAiming(dt);
+        }
+
+        private Vector2 ApplyDeadzone(Vector2 stick)
+        {
+            if (stick.Length() < StickDeadzone)
+                return Vector2.Zero;
+
+            float mag = (stick.Length() - StickDeadzone) / (1f - StickDeadzone);
+            return Vector2.Normalize(stick) * Math.Clamp(mag, 0f, 1f);
+        }
+
+        /// <summary>Solo tastiera: Q/E (P1) o O/P (P2) ruotano il personaggio per mirare.</summary>
+        private void HandleKeyboardAiming(float dt)
+        {
+            Keys rotLeft = PlayerIndex == 0 ? Keys.Q : Keys.O;
+            Keys rotRight = PlayerIndex == 0 ? Keys.E : Keys.P;
+
+            float yaw = (Input.IsKeyDown(rotLeft) ? 1f : 0f) - (Input.IsKeyDown(rotRight) ? 1f : 0f);
+            if (yaw == 0f) return;
+
+            float speed = (float)Math.PI * 1.6f * dt; // ~290°/s
+            var rot = Entity.Transform.Rotation;
+            var yawQuat = Quaternion.RotationAxis(Vector3.UnitY, yaw * speed);
+            Entity.Transform.Rotation = yawQuat * rot;
         }
 
         private void ClampToAliveFloor()
@@ -131,19 +205,36 @@ namespace DiscFaithful
             if (CurrentDisc == null || CurrentDisc.IsInFlight || throwCooldown > 0f)
                 return;
 
-            var pad = GetPad();
-            bool throwPressed = pad.RightTrigger > 0.55f
+            bool throwPressed;
+            Vector3 dir;
+
+            if (AiControlled)
+            {
+                throwPressed = aiWantThrow;
+                dir = aiThrowDir.LengthSquared() > 0.01f ? aiThrowDir
+                    : Entity.Transform.WorldMatrix.Forward;
+            }
+            else if (UsingKeyboard)
+            {
+                Keys throwKey = PlayerIndex == 0 ? Keys.Space : Keys.Enter;
+                throwPressed = Input.IsKeyPressed(throwKey);
+                dir = Entity.Transform.WorldMatrix.Forward;
+            }
+            else
+            {
+                var pad = GetPad();
+                throwPressed = pad.RightTrigger > 0.55f
                               || pad.IsButtonPressed(GamePadButton.A);
+                dir = Entity.Transform.WorldMatrix.Forward;
+
+                Vector2 aim = pad.RightThumb;
+                if (aim.Length() > StickDeadzone)
+                {
+                    dir = Vector3.Normalize(new Vector3(aim.X, 0f, -aim.Y));
+                }
+            }
 
             if (!throwPressed) return;
-
-            Vector3 dir = Entity.Transform.WorldMatrix.Forward;
-
-            Vector2 aim = pad.RightThumb;
-            if (aim.Length() > StickDeadzone)
-            {
-                dir = Vector3.Normalize(new Vector3(aim.X, 0f, -aim.Y));
-            }
 
             CurrentDisc.Throw(dir);
             CurrentDisc = null;
@@ -153,6 +244,19 @@ namespace DiscFaithful
 
         private void HandleBlock()
         {
+            if (AiControlled)
+            {
+                IsBlocking = aiBlocking;
+                return;
+            }
+
+            if (UsingKeyboard)
+            {
+                Keys blockKey = PlayerIndex == 0 ? Keys.LeftShift : Keys.RightShift;
+                IsBlocking = Input.IsKeyDown(blockKey);
+                return;
+            }
+
             var pad = GetPad();
             IsBlocking = pad.IsButtonDown(GamePadButton.X)
                       || pad.IsButtonDown(GamePadButton.LeftShoulder)
@@ -196,8 +300,7 @@ namespace DiscFaithful
             if (currentAnim == AnimThrow || currentAnim == AnimHit)
                 return;
 
-            var pad = GetPad();
-            bool isMoving = pad.LeftThumb.Length() > StickDeadzone;
+            bool isMoving = GetMoveStick().Length() > StickDeadzone;
             PlayAnim(isMoving ? AnimWalk : AnimIdle, true);
         }
 

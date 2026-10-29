@@ -1,5 +1,6 @@
 using Stride.Core.Mathematics;
 using Stride.Engine;
+using Stride.Input;
 using Stride.UI;
 using Stride.UI.Controls;
 using Stride.UI.Panels;
@@ -15,6 +16,9 @@ namespace DiscFaithful.UI
         public GameManager GameManager;
         public UIComponent UI;
 
+        /// <summary>Menu modalità a cui tornare alla fine della modalità (opzionale).</summary>
+        public ModeSelectUI Menu;
+
         public Color TextColor = new Color(0, 220, 0);
         public Color AlertColor = new Color(255, 60, 60);
         public Color TitleColor = new Color(255, 220, 0);
@@ -26,6 +30,10 @@ namespace DiscFaithful.UI
         private TextBlock messageLabel;
 
         private float messageTimer;
+        private bool awaitingMenuReturn;
+        private float menuPromptTimer;
+
+        private const string MenuPrompt = "PRESS  A  FOR  MENU";
 
         public override void Start()
         {
@@ -113,11 +121,43 @@ namespace DiscFaithful.UI
 
             levelLabel.Text = $"LEVEL {GameManager.CurrentLevel}";
 
+            UpdateMenuReturn();
+
             if (messageTimer > 0f)
             {
                 messageTimer -= (float)Game.UpdateTime.Elapsed.TotalSeconds;
-                if (messageTimer <= 0f)
+                if (messageTimer <= 0f && !awaitingMenuReturn)
                     messageLabel.Text = "";
+            }
+        }
+
+        /// <summary>A modalità completata: dopo una pausa mostra il prompt e
+        /// riporta al menu selezione modalità con A / Enter.</summary>
+        private void UpdateMenuReturn()
+        {
+            if (!awaitingMenuReturn) return;
+
+            menuPromptTimer -= (float)Game.UpdateTime.Elapsed.TotalSeconds;
+            if (menuPromptTimer <= 0f && messageLabel.Text != MenuPrompt)
+            {
+                messageLabel.Text = MenuPrompt;
+                messageLabel.TextColor = TitleColor;
+            }
+
+            bool confirmPressed = Input.IsKeyPressed(Keys.Enter)
+                               || Input.IsKeyPressed(Keys.Space);
+
+            if (!confirmPressed)
+            {
+                var pad = Input.GamePadCount > 0 ? Input.GetGamePadByIndex(0) : default;
+                confirmPressed = pad.IsButtonPressed(GamePadButton.A);
+            }
+
+            if (confirmPressed)
+            {
+                awaitingMenuReturn = false;
+                messageLabel.Text = "";
+                Menu?.ShowMenu();
             }
         }
 
@@ -136,10 +176,13 @@ namespace DiscFaithful.UI
         {
             string name = champ?.Entity.Name ?? "?";
             ShowMessage($"CHAMPION: {name}", 4f);
+            awaitingMenuReturn = true;
+            menuPromptTimer = 3.5f;
         }
 
         private void OnModeChanged(GameModeConfig cfg)
         {
+            awaitingMenuReturn = false;
             ShowMessage(cfg.DisplayName, 2f);
         }
 

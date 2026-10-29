@@ -37,10 +37,22 @@ namespace DiscFaithful
 
         public bool IsInFlight { get; private set; }
 
+        /// <summary>Ultimo giocatore che l'ha avuto in mano (per la restituzione se esce dall'arena).</summary>
+        public Entity LastOwner;
+
+        // ---- Limiti arena ----
+        /// <summary>Se il disco scende sotto questa altezza è uscito dall'arena.</summary>
+        public float OutOfBoundsY = -3f;
+
+        /// <summary>Volo oltre questi secondi senza pesci prese → fuori.</summary>
+        public float MaxFlightSeconds = 12f;
+
         public event Action<Disc, Entity> OnHitPlayer;
         public event Action<Disc, Tile> OnHitWallTile;
+        public event Action<Disc> OnOutOfBounds;
 
         private Quaternion flightSpin = Quaternion.Identity;
+        private float flightTime;
 
         public override void Start()
         {
@@ -117,12 +129,10 @@ namespace DiscFaithful
                 0f);
             VisualModel.Transform.Rotation = flightSpin;
 
-            // Mantieni il disco sul piano (Y ≈ costante) in caso di piccoli drift
-            var pos = Entity.Transform.Position;
-            if (Math.Abs(pos.Y - HandOffset.Y) > 0.5f && Owner == null)
-            {
-                // Solo correzione leggera se non in mano
-            }
+            // Fuori dall'arena o volo troppo lungo → segnala per la restituzione
+            flightTime += dt;
+            if (Entity.Transform.Position.Y < OutOfBoundsY || flightTime > MaxFlightSeconds)
+                OnOutOfBounds?.Invoke(this);
         }
 
         /// <summary>
@@ -160,6 +170,8 @@ namespace DiscFaithful
 
             IsInFlight = true;
             flightSpin = Quaternion.Identity;
+            flightTime = 0f;
+            LastOwner = Owner;
             Owner = null; // non più in mano finché non viene preso
 
             if (TrailEntity != null)
@@ -178,7 +190,9 @@ namespace DiscFaithful
                 return;
 
             Owner = newOwner;
+            LastOwner = newOwner;
             IsInFlight = false;
+            flightTime = 0f;
 
             Rigidbody.LinearVelocity = Vector3.Zero;
             Rigidbody.AngularVelocity = Vector3.Zero;

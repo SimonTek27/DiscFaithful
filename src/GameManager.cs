@@ -21,7 +21,6 @@ namespace DiscFaithful
 
         public List<Disc> ActiveDiscs = new();
 
-        // ---- Modalità ----
         public GameModeType SelectedMode = GameModeType.SingleMatch;
         public GameModeConfig Config { get; private set; }
 
@@ -31,7 +30,6 @@ namespace DiscFaithful
         public int ScoreP1 { get; private set; }
         public int ScoreP2 { get; private set; }
 
-        /// <summary>Match vinti nel campionato (solo Championship).</summary>
         public int ChampionshipWinsP1 { get; private set; }
         public int ChampionshipWinsP2 { get; private set; }
 
@@ -50,10 +48,6 @@ namespace DiscFaithful
             SubscribePlayers();
             StartRound();
         }
-
-        // =========================================================
-        //  MODALITÀ
-        // =========================================================
 
         public void SetMode(GameModeType mode)
         {
@@ -86,10 +80,6 @@ namespace DiscFaithful
             SetMode(mode);
             StartRound();
         }
-
-        // =========================================================
-        //  ROUND / MATCH
-        // =========================================================
 
         private void SubscribePlayers()
         {
@@ -213,7 +203,6 @@ namespace DiscFaithful
         {
             if (RoundOver || ModeFinished) return;
 
-            // Training: non finisce il round, solo reset vita
             if (Config.Mode == GameModeType.Training)
             {
                 p.ResetForRound();
@@ -258,7 +247,6 @@ namespace DiscFaithful
             Log.Info($"[GameManager] Round over – {winner?.Entity.Name} ({reason})  {ScoreP1}-{ScoreP2}");
             OnMatchEnded?.Invoke(winner, reason);
 
-            // Controlla fine modalità
             CheckModeProgress(winner);
         }
 
@@ -266,31 +254,26 @@ namespace DiscFaithful
         {
             int needed = Config.WinsToChampion;
 
-            // TRAINING: non finisce mai da solo
             if (Config.Mode == GameModeType.Training)
                 return;
 
-            // SINGLE MATCH / TOURNAMENT / CHAMPIONSHIP: score round
             if (ScoreP1 >= needed || ScoreP2 >= needed)
             {
                 var champ = ScoreP1 >= needed ? Player1 : Player2;
 
                 if (Config.Mode == GameModeType.Championship)
                 {
-                    // Un "match" del campionato è finito → aggiorna classifica campionato
                     if (champ == Player1) ChampionshipWinsP1++;
                     else ChampionshipWinsP2++;
 
                     Log.Info($"[GameManager] Championship match won by {champ?.Entity.Name}  Series {ChampionshipWinsP1}-{ChampionshipWinsP2}");
 
-                    // Campionato finisce a 3 match vinti (best of 5 series)
                     if (ChampionshipWinsP1 >= 3 || ChampionshipWinsP2 >= 3)
                     {
                         FinishMode(champ);
                         return;
                     }
 
-                    // Prossimo match del campionato: reset score round, forse avanza livello
                     ScoreP1 = 0;
                     ScoreP2 = 0;
                     if (Config.AutoAdvanceLevel && CurrentLevel < Config.MaxLevel)
@@ -299,10 +282,8 @@ namespace DiscFaithful
                     return;
                 }
 
-                // SingleMatch o Tournament: fine modalità
                 if (Config.Mode == GameModeType.Tournament && Config.AutoAdvanceLevel)
                 {
-                    // Torneo: se non sei all'ultimo livello, avanza e continua
                     if (CurrentLevel < Config.MaxLevel)
                     {
                         CurrentLevel++;
@@ -326,10 +307,6 @@ namespace DiscFaithful
             OnModeCompleted?.Invoke(Config.Mode, champion);
         }
 
-        // =========================================================
-        //  COMBATTIMENTO
-        // =========================================================
-
         public void OnDiscHitPlayer(Disc disc, Entity hitEntity)
         {
             var player = hitEntity.Get<PlayerController>();
@@ -341,10 +318,9 @@ namespace DiscFaithful
                 return;
             }
 
-            // Training con vita infinita: danno solo visuale
             if (Config.InfiniteLife)
             {
-                player.PlayAnimPublicHit();
+                player.PlayHitFeedback();
                 Audio?.PlayHitPlayer();
                 return;
             }
@@ -358,10 +334,6 @@ namespace DiscFaithful
             Audio?.PlayTileDestroy();
             Audio?.PlayImpact();
         }
-
-        // =========================================================
-        //  API UI / FLOW
-        // =========================================================
 
         public void NextRound()
         {

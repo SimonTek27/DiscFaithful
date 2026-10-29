@@ -2,18 +2,21 @@
 
 Remake fedele delle meccaniche di **Disc (Loriciel, 1990/91)** realizzato in Stride Engine.
 
-## Contenuto
+## Struttura del progetto
 
 ```
-Scripts/
-  Tile.cs              – piastrella floor/wall + simboli + animazioni Hit/Destroy
-  Platform.cs          – 8+8 tile, link 1:1, auto-collect
-  Disc.cs              – fisica, possesso, rotazione, trail, collisioni
-  PlayerController.cs  – Xbox pad, movimento 3D, clamp floor, animazioni
-  GameManager.cs       – livelli, multi-disco (1→4), score, reset round
-  CameraController.cs  – camera fissa stile arcade 3D
-  AudioManager.cs      – wrapper per i sample originali
-
+src/
+  Tile.cs
+  Platform.cs
+  Disc.cs
+  GameManager.cs
+  CameraController.cs
+  AudioManager.cs
+  controls/
+    PlayerController.cs          ← Xbox + movimento + animazioni
+  ui/                            ← HUD 1990-style, menu, score (in arrivo)
+  multiplayer/                   ← netcode / online (in arrivo)
+assets/                          ← modelli 3D, texture, audio
 Docs/
   00_ORIGINAL_RULES.md
   01_STRIDE_SETUP.md
@@ -26,21 +29,21 @@ Docs/
 ## Avvio rapido
 
 1. Crea un nuovo progetto **3D** in Stride Game Studio.
-2. Copia la cartella `Scripts` nel progetto.
-3. Segui `Docs/01_STRIDE_SETUP.md` e `Docs/05_STRIDE_IMPORT_GUIDE.md`.
-4. Assegna i riferimenti in editor (liste tile, PlayerIndex, DiscPrefab, Camera…).
+2. Copia la cartella `src` nel progetto (o aggiungi i file come script).
+3. Segui `Docs/05_STRIDE_IMPORT_GUIDE.md`.
+4. Assegna i riferimenti in editor.
 5. Premi Play e usa un controller Xbox.
 
-## Controlli
+## Controlli Xbox
 
-| Azione        | Xbox              |
-|---------------|-------------------|
-| Muovi         | Left Stick        |
-| Mira          | Right Stick       |
-| Lancia        | RT / A            |
-| Para / Prendi | X / LB / LT       |
+| Azione        | Pulsante     |
+|---------------|--------------|
+| Muovi         | Left Stick   |
+| Mira          | Right Stick  |
+| Lancia        | RT / A       |
+| Para / Prendi | X / LB / LT  |
 
-## Regole fedeli
+## Regole fedeli all'originale
 
 - 8 floor + 8 wall per piattaforma (griglia 2×4)
 - Danno solo sulle wall → ciclo simboli → distruzione wall + floor collegata
@@ -51,4 +54,4 @@ Docs/
 
 ## Asset free consigliati
 
-Vedi `Docs/04_FREE_3D_ASSETS.md` (Quaternius + Kenney CC0).
+Vedi `Docs/04_FREE_3D_ASSETS.md` (Quaternius + Kenney – CC0).

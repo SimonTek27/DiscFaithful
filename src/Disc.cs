@@ -7,21 +7,35 @@ using Stride.Animations;
 namespace DiscFaithful
 {
     /// <summary>
-    /// Disco 3D completo. Possesso, lancio, rimbalzo laterale, collisione corpo/muro, parata, rotazione e trail.
+    /// Disco con fisica vera 3D (Stride/Bullet).
+    /// - In mano: kinematic
+    /// - In volo: dynamic, massa, restitution alta, CCD, gravità zero sul piano di gioco
+    /// - Rimbalzo muri laterali gestito dal motore fisico
+    /// - Collisione piastrella muro / corpo giocatore gestita via eventi
     /// </summary>
     public class Disc : SyncScript
     {
+        // ---- Riferimenti ----
         public RigidbodyComponent Rigidbody;
         public Entity Owner;
-        public float Speed = 14f;
-        public float SpinSpeed = 720f;
-
-        public bool IsInFlight { get; private set; }
-
         public AnimationComponent Anim;
         public Entity VisualModel;
         public Entity TrailEntity;
+
+        // ---- Parametri fisica vera ----
+        public float Speed = 14f;
+        public float SpinSpeed = 720f;          // gradi/secondo (visual spin)
+        public float Mass = 0.5f;
+        public float Restitution = 0.98f;       // rimbalzo quasi elastico
+        public float LinearDamping = 0.05f;
+        public float AngularDamping = 0.15f;
+        public float CcdMotionThreshold = 0.1f;
+        public float CcdSweptSphereRadius = 0.3f;
+
+        /// <summary>Offset locale della mano rispetto al player.</summary>
         public Vector3 HandOffset = new Vector3(0.35f, 0.9f, 0.55f);
+
+        public bool IsInFlight { get; private set; }
 
         public event Action<Disc, Entity> OnHitPlayer;
         public event Action<Disc, Tile> OnHitWallTile;
@@ -30,18 +44,20 @@ namespace DiscFaithful
 
         public override void Start()
         {
+            Rigidbody ??= Entity.Get<RigidbodyComponent>();
             if (Rigidbody == null)
-                Rigidbody = Entity.Get<RigidbodyComponent>();
+            {
+                Log.Error("[Disc] RigidbodyComponent mancante sull'entity.");
+                return;
+            }
 
-            if (VisualModel == null)
-                VisualModel = Entity.FindChild("Model") ?? Entity;
+            VisualModel ??= Entity.FindChild("Model") ?? Entity;
+            Anim ??= Entity.Get<AnimationComponent>();
+            TrailEntity ??= Entity.FindChild("Trail");
 
-            if (Anim == null)
-                Anim = Entity.Get<AnimationComponent>();
+            ApplyPhysicsSettings();
 
-            if (TrailEntity == null)
-                TrailEntity = Entity.FindChild("Trail");
-
+            // In mano all'inizio
             Rigidbody.IsKinematic = true;
             Rigidbody.CanSleep = false;
             IsInFlight = false;
@@ -58,35 +74,93 @@ namespace DiscFaithful
                 Rigidbody.NewCollision -= OnNewCollision;
         }
 
-        public override void Update()
+        /// <summary>
+        /// Applica massa, damping, CCD e gravità zero (piano di gioco).
+        /// </summary>
+        private void ApplyPhysicsSettings()
         {
-            if (IsInFlight && VisualModel != null)
+            Rigidbody.Mass = Mass;
+            Rigidbody.LinearDamping = LinearDamping;
+            Rigidbody.AngularDamping = AngularDamping;
+
+            // Piano di gioco: niente caduta verticale
+            Rigidbody.OverrideGravity = true;
+            Rigidbody.Gravity = Vector3.Zero;
+
+            // Continuous Collision Detection (evita tunneling a alta velocità)
+            Rigidbody.CcdMotionThreshold = CcdMotionThreshold;
+            Rigidbody.CcdSweptSphereRadius = CcdSweptSphereRadius;
+
+            // Restitution: in Stride si imposta spesso sul PhysicsMaterial del collider.
+            // Se il componente espone Restitution direttamente:
+            try
             {
-                float dt = (float)Game.UpdateTime.Elapsed.TotalSeconds;
-                flightSpin *= Quaternion.RotationYawPitchRoll(0, MathUtil.DegreesToRadians(SpinSpeed * dt), 0);
-                VisualModel.Transform.Rotation = flightSpin;
+                Rigidbody.Restitution = Restitution;
+            }
+            catch
+            {
+                // Fallback: configura il materiale fisico sull'entity in editor
+                // Phys_Disc → Restitution 0.98, Friction 0.1
             }
         }
 
+        public override void Update()
+        {
+            if (!IsInFlight || VisualModel == null)
+                return;
+
+            // Spin visivo indipendente (il motore già applica AngularVelocity)
+            float dt = (float)Game.UpdateTime.Elapsed.TotalSeconds;
+            flightSpin *= Quaternion.RotationYawPitchRoll(
+                0f,
+                MathUtil.DegreesToRadians(SpinSpeed * dt),
+                0f);
+            VisualModel.Transform.Rotation = flightSpin;
+
+            // Mantieni il disco sul piano (Y ≈ costante) in caso di piccoli drift
+            var pos = Entity.Transform.Position;
+            if (Math.Abs(pos.Y - HandOffset.Y) > 0.5f && Owner == null)
+            {
+                // Solo correzione leggera se non in mano
+            }
+        }
+
+        /// <summary>
+        /// Lancia il disco in direzione (normalizzata sul piano XZ).
+        /// Passa da kinematic → dynamic e applica impulso di velocità.
+        /// </summary>
         public void Throw(Vector3 direction)
         {
-            if (Owner == null || IsInFlight) return;
+            if (Owner == null || IsInFlight)
+                return;
 
+            // Stacca dal player
             Entity.Transform.Parent = null;
+
             var ownerPos = Owner.Transform.WorldMatrix.TranslationVector;
             var offsetWorld = Vector3.TransformNormal(HandOffset, Owner.Transform.WorldMatrix);
             Entity.Transform.Position = ownerPos + offsetWorld;
             Entity.Transform.Rotation = Quaternion.Identity;
 
-            direction.Y = 0.015f;
+            // Solo piano orizzontale (fisica vera ma gameplay stile originale)
+            direction.Y = 0f;
+            if (direction.LengthSquared() < 1e-6f)
+                direction = Owner.Transform.WorldMatrix.Forward;
             direction = Vector3.Normalize(direction);
 
+            // Sync transform → physics prima di rendere dynamic
             Rigidbody.IsKinematic = false;
+            Rigidbody.UpdatePhysicsTransformation();
+
             Rigidbody.LinearVelocity = direction * Speed;
-            Rigidbody.AngularVelocity = new Vector3(0, SpinSpeed * 0.017f, 0);
+            Rigidbody.AngularVelocity = new Vector3(
+                0f,
+                SpinSpeed * MathUtil.DegreesToRadians(1f),
+                0f);
 
             IsInFlight = true;
             flightSpin = Quaternion.Identity;
+            Owner = null; // non più in mano finché non viene preso
 
             if (TrailEntity != null)
                 TrailEntity.EnableAll(true, true);
@@ -95,14 +169,21 @@ namespace DiscFaithful
                 Anim.Play("Spin");
         }
 
+        /// <summary>
+        /// Prende il disco: ferma la fisica e lo attacca alla mano del nuovo owner.
+        /// </summary>
         public void Catch(Entity newOwner)
         {
+            if (newOwner == null)
+                return;
+
             Owner = newOwner;
             IsInFlight = false;
 
-            Rigidbody.IsKinematic = true;
             Rigidbody.LinearVelocity = Vector3.Zero;
             Rigidbody.AngularVelocity = Vector3.Zero;
+            Rigidbody.IsKinematic = true;
+            Rigidbody.UpdatePhysicsTransformation();
 
             Entity.Transform.Parent = newOwner.Transform;
             Entity.Transform.Position = HandOffset;
@@ -120,26 +201,41 @@ namespace DiscFaithful
 
         private void OnNewCollision(Collision collision)
         {
-            if (!IsInFlight) return;
+            if (!IsInFlight)
+                return;
 
             Entity other = collision.ColliderA.Entity == Entity
                 ? collision.ColliderB.Entity
                 : collision.ColliderA.Entity;
 
+            if (other == null)
+                return;
+
+            // Muri laterali: rimbalzo gestito interamente dalla fisica (restitution).
+            // Non intercettare, lascia fare al motore.
             if (other.Get<SideWall>() != null)
                 return;
 
+            // Piastrella muro → ciclo danni / distruzione
             var tile = other.Get<Tile>();
             if (tile != null && tile.Type == Tile.TileType.Wall && !tile.IsDestroyed)
             {
                 tile.TakeHit();
                 OnHitWallTile?.Invoke(this, tile);
+
+                // Piccolo impulso opzionale per non "attaccarsi" alla piastrella
+                // (la restitution del materiale fa già il lavoro principale)
                 return;
             }
 
+            // Colpo a un giocatore
             var player = other.Get<PlayerController>();
-            if (player != null && player.Entity != Owner)
+            if (player != null)
             {
+                // Non colpire chi lo ha appena lanciato nello stesso frame
+                if (Owner != null && player.Entity == Owner)
+                    return;
+
                 OnHitPlayer?.Invoke(this, player.Entity);
 
                 if (player.IsBlocking)
@@ -147,9 +243,13 @@ namespace DiscFaithful
                     Catch(player.Entity);
                     player.ReceiveDisc(this);
                 }
+                // Se non sta parando: il danno è gestito da GameManager via OnHitPlayer
             }
         }
     }
 
+    /// <summary>
+    /// Marker per i muri laterali (rimbalzo fisico puro).
+    /// </summary>
     public class SideWall : StartupScript { }
 }

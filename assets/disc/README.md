@@ -1,15 +1,15 @@
 # Disc / Frisbee
 
-## File presenti (locale)
+## Available files (local)
 
-| File | Note |
-|------|------|
-| `frisbee.blend` | Originale (Blender 5.0, compresso zstd) |
+| File | Format | Notes |
+|------|--------|-------|
+| `frisbee.fbx` | FBX | **Ready for Stride** |
+| `frisbee.obj` | OBJ | Source mesh |
+| `frisbee.blend` | Blend | Original (Blender 5) |
 
-**Importante:** il file è in formato Blender 5.0 → esporta in FBX/GLB dal tuo Blender 5.
+Use **`frisbee.fbx`** in Stride.
 
-### Esportazione consigliata
-1. Apri con Blender 5+
-2. Export → FBX o glTF (.glb)
-3. Apply transforms, origin al centro, diametro ≈ 0.7
-4. Materiale emissive (arancione/ciano)
+- Diameter ≈ 0.7 units
+- Assign to Disc prefab ModelComponent
+- Add emissive material (orange/cyan)

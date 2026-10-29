@@ -1,32 +1,21 @@
-# Audio – Sample estratti dall’ADF originale
+# Audio – Original Disc samples (English names)
 
-## File estratti (presenti in locale)
+Extracted from the original ADF → WAV (8-bit mono, 11025 Hz).
 
-| File WAV          | Origine ADF     | Uso in gioco           | Campo AudioManager |
-|-------------------|-----------------|------------------------|--------------------|
-| LAUNCH.wav        | LAUNCH.SPL      | Lancio disco           | SndLaunch          |
-| IMPACT.wav        | IMPACT.SPL      | Impatto / rimbalzo     | SndImpact          |
-| DESDALLE.wav      | DESDALLE.SPL    | Distruzione piastrella | SndDesDalle        |
-| MORT.wav          | MORT.SPL        | Morte / caduta         | SndMort            |
-| VICTOIRE.wav      | VICTOIRE.SPL    | Vittoria               | SndVictoire        |
-| GONG.wav          | GONG.SPL        | Inizio round           | SndGong            |
-| PARADE.wav        | PARADE.SPL      | Parata                 | SndParade          |
-| CHUTE.wav         | CHUTE.SPL       | Caduta                 | extra              |
-| TOUCHDEF.wav      | TOUCHDEF.SPL    | Tocco difesa           | extra              |
-| VITRE15K.wav      | VITRE15K.SPL    | Vetro / impatto        | extra              |
-| DIC13.wav         | DIC13.SPL       | extra                  | extra              |
+| File | Original ADF | Usage | AudioManager |
+|------|--------------|-------|--------------|
+| `launch.wav` | LAUNCH.SPL | Throw disc | SndLaunch |
+| `impact.wav` | IMPACT.SPL | Bounce / hit | SndImpact |
+| `tile_destroy.wav` | DESDALLE.SPL | Tile destruction | SndDesDalle |
+| `death.wav` | MORT.SPL | Death / fall | SndMort |
+| `victory.wav` | VICTOIRE.SPL | Victory | SndVictoire |
+| `gong.wav` | GONG.SPL | Round start | SndGong |
+| `block.wav` | PARADE.SPL | Block / catch | SndParade |
+| `fall.wav` | CHUTE.SPL | Fall | — |
+| `touch_defense.wav` | TOUCHDEF.SPL | Defense touch | — |
+| `glass.wav` | VITRE15K.SPL | Glass impact | — |
+| `dic13.wav` | DIC13.SPL | Extra | — |
 
-**Percorso locale:**  
-`/home/workdir/artifacts/DiscFaithful/assets/audio/`
+**Local path:** `/home/workdir/artifacts/DiscFaithful/assets/audio/`
 
-## Formato
-- 8-bit mono, 15500 Hz
-- Convertiti da sample Amiga signed → unsigned WAV
-
-## Nota
-Alcuni sample condividevano il settore di partenza sull’ADF. Se un suono sembra tagliato o con rumore, regola start offset o sample rate in un editor audio.
-
-## Uso in Stride
-Importa i `.wav` come Sound e assegnali ai campi dell’`AudioManager`.
-
-I file binari (`.wav` / `.SPL`) vanno caricati manualmente su GitHub con Upload files.
+Upload the `.wav` files to GitHub manually (binary).

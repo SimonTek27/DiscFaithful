@@ -1,26 +1,32 @@
-# Audio – Sample originali Disc (Loriciel)
+# Audio – Sample estratti dall’ADF originale
 
-Sample presenti nel disco ADF originale:
+## File estratti (presenti in locale)
 
-| File ADF     | Uso consigliato          | Campo AudioManager |
-|--------------|--------------------------|--------------------|
-| LAUNCH.SPL   | Lancio disco             | SndLaunch          |
-| IMPACT.SPL   | Impatto / rimbalzo       | SndImpact          |
-| DESDALLE.SPL | Distruzione piastrella   | SndDesDalle        |
-| MORT.SPL     | Morte / caduta           | SndMort            |
-| VICTOIRE.SPL | Vittoria                 | SndVictoire        |
-| GONG.SPL     | Inizio round / gong      | SndGong            |
-| PARADE.SPL   | Parata                   | SndParade          |
-| CHUTE.SPL    | Caduta                   | extra              |
-| TOUCHDEF.SPL | Tocco difesa             | extra              |
-| VITRE15K.SPL | Vetro / impatto          | extra              |
+| File WAV          | Origine ADF     | Uso in gioco           | Campo AudioManager |
+|-------------------|-----------------|------------------------|--------------------|
+| LAUNCH.wav        | LAUNCH.SPL      | Lancio disco           | SndLaunch          |
+| IMPACT.wav        | IMPACT.SPL      | Impatto / rimbalzo     | SndImpact          |
+| DESDALLE.wav      | DESDALLE.SPL    | Distruzione piastrella | SndDesDalle        |
+| MORT.wav          | MORT.SPL        | Morte / caduta         | SndMort            |
+| VICTOIRE.wav      | VICTOIRE.SPL    | Vittoria               | SndVictoire        |
+| GONG.wav          | GONG.SPL        | Inizio round           | SndGong            |
+| PARADE.wav        | PARADE.SPL      | Parata                 | SndParade          |
+| CHUTE.wav         | CHUTE.SPL       | Caduta                 | extra              |
+| TOUCHDEF.wav      | TOUCHDEF.SPL    | Tocco difesa           | extra              |
+| VITRE15K.wav      | VITRE15K.SPL    | Vetro / impatto        | extra              |
+| DIC13.wav         | DIC13.SPL       | extra                  | extra              |
 
-## Come estrarli
-I file `.SPL` sono sample Amiga (8-bit signed).
-Per estrarli correttamente serve un tool Amiga (ADF Opus, XAD, unADF + proplayer).
+**Percorso locale:**  
+`/home/workdir/artifacts/DiscFaithful/assets/audio/`
 
-In alternativa usa pack free:
-- Kenney Audio packs (CC0)
-- OpenGameArt.org
+## Formato
+- 8-bit mono, 15500 Hz
+- Convertiti da sample Amiga signed → unsigned WAV
 
-Assegna i Sound all’`AudioManager` in Stride.
+## Nota
+Alcuni sample condividevano il settore di partenza sull’ADF. Se un suono sembra tagliato o con rumore, regola start offset o sample rate in un editor audio.
+
+## Uso in Stride
+Importa i `.wav` come Sound e assegnali ai campi dell’`AudioManager`.
+
+I file binari (`.wav` / `.SPL`) vanno caricati manualmente su GitHub con Upload files.

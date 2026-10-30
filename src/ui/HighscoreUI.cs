@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Linq;
 using System.Text;
 using Stride.Core.Mathematics;
@@ -11,8 +12,9 @@ using Stride.UI.Panels;
 namespace DiscFaithful.UI
 {
     /// <summary>
-    /// Tabella highscore – stile contemporaneo.
-    /// Rank | Name | Mode | Score | Level | Date
+    /// Tabella highscore con pagine:
+    /// 0 = All, 1 = Single Match, 2 = Tournament
+    /// Navigazione: ← → / D-Pad Left-Right, B torna al menu.
     /// </summary>
     public class HighscoreUI : SyncScript
     {
@@ -25,8 +27,28 @@ namespace DiscFaithful.UI
         public Color TextSecondary = new Color(160, 170, 190);
         public Color Accent = new Color(88, 140, 255);
         public Color HeaderColor = new Color(120, 130, 150);
+        public Color DimColor = new Color(100, 110, 130);
 
+        private static readonly string[] PageTitles =
+        {
+            "All Modes",
+            "Single Match",
+            "Tournament"
+        };
+
+        /// <summary>Filtro modalità: null = tutte, altrimenti DisplayName esatto.</summary>
+        private static readonly string[] PageFilters =
+        {
+            null,
+            "Single Match",
+            "Tournament"
+        };
+
+        private int pageIndex;
         private bool visible;
+
+        private TextBlock titleText;
+        private TextBlock pageIndicator;
         private TextBlock tableText;
         private TextBlock emptyText;
 
@@ -85,8 +107,18 @@ namespace DiscFaithful.UI
                 TextSize = 32,
                 TextColor = TextPrimary,
                 HorizontalAlignment = HorizontalAlignment.Center,
-                Margin = new Thickness(0, 0, 0, 8)
+                Margin = new Thickness(0, 0, 0, 4)
             });
+
+            pageIndicator = new TextBlock
+            {
+                Text = PageLabel(),
+                TextSize = 15,
+                TextColor = Accent,
+                HorizontalAlignment = HorizontalAlignment.Center,
+                Margin = new Thickness(0, 0, 0, 16)
+            };
+            stack.Children.Add(pageIndicator);
 
             stack.Children.Add(new TextBlock
             {
@@ -94,7 +126,7 @@ namespace DiscFaithful.UI
                 TextSize = 12,
                 TextColor = HeaderColor,
                 HorizontalAlignment = HorizontalAlignment.Center,
-                Margin = new Thickness(0, 12, 0, 4)
+                Margin = new Thickness(0, 4, 0, 4)
             });
 
             stack.Children.Add(new Border
@@ -118,7 +150,7 @@ namespace DiscFaithful.UI
 
             emptyText = new TextBlock
             {
-                Text = "No scores yet. Play a match!",
+                Text = "No scores yet for this category.",
                 TextSize = 14,
                 TextColor = TextSecondary,
                 HorizontalAlignment = HorizontalAlignment.Center,
@@ -129,9 +161,9 @@ namespace DiscFaithful.UI
 
             stack.Children.Add(new TextBlock
             {
-                Text = "B  Back to menu",
+                Text = "← →  Switch page      B  Back",
                 TextSize = 12,
-                TextColor = new Color(100, 110, 130),
+                TextColor = DimColor,
                 HorizontalAlignment = HorizontalAlignment.Center,
                 Margin = new Thickness(0, 28, 0, 0)
             });
@@ -143,17 +175,32 @@ namespace DiscFaithful.UI
             RefreshTable();
         }
 
+        private string PageLabel()
+        {
+            int n = PageTitles.Length;
+            // es.  ·  All Modes  ·
+            return $"‹  {PageTitles[pageIndex]}  ›    {pageIndex + 1}/{n}";
+        }
+
         public void RefreshTable()
         {
             if (tableText == null) return;
 
-            var list = Highscores?.GetTop() ?? new System.Collections.Generic.List<HighscoreEntry>();
+            if (pageIndicator != null)
+                pageIndicator.Text = PageLabel();
+
+            var list = GetEntriesForCurrentPage();
 
             if (list.Count == 0)
             {
                 tableText.Text = "";
                 if (emptyText != null)
+                {
+                    emptyText.Text = pageIndex == 0
+                        ? "No scores yet. Play a match!"
+                        : $"No scores yet for {PageTitles[pageIndex]}.";
                     emptyText.Visibility = Visibility.Visible;
+                }
                 return;
             }
 
@@ -173,6 +220,18 @@ namespace DiscFaithful.UI
             tableText.Text = sb.ToString().TrimEnd();
         }
 
+        private List<HighscoreEntry> GetEntriesForCurrentPage()
+        {
+            if (Highscores == null)
+                return new List<HighscoreEntry>();
+
+            string filter = PageFilters[pageIndex];
+            if (filter == null)
+                return Highscores.GetTop();
+
+            return Highscores.GetByMode(filter, Highscores.MaxEntries);
+        }
+
         private static string Truncate(string s, int max)
         {
             if (string.IsNullOrEmpty(s)) return "";
@@ -184,6 +243,21 @@ namespace DiscFaithful.UI
             if (!visible) return;
 
             var pad = Input.GamePadCount > 0 ? Input.GetGamePadByIndex(0) : default;
+
+            // Pagine ← →
+            if (pad.IsButtonPressed(GamePadButton.PadLeft) || pad.IsButtonPressed(GamePadButton.DPadLeft)
+                || Input.IsKeyPressed(Keys.Left))
+            {
+                pageIndex = (pageIndex - 1 + PageTitles.Length) % PageTitles.Length;
+                RefreshTable();
+            }
+            else if (pad.IsButtonPressed(GamePadButton.PadRight) || pad.IsButtonPressed(GamePadButton.DPadRight)
+                     || Input.IsKeyPressed(Keys.Right))
+            {
+                pageIndex = (pageIndex + 1) % PageTitles.Length;
+                RefreshTable();
+            }
+
             if (pad.IsButtonPressed(GamePadButton.B) || Input.IsKeyPressed(Keys.Escape))
             {
                 Hide();
@@ -194,6 +268,7 @@ namespace DiscFaithful.UI
         public void Show()
         {
             visible = true;
+            pageIndex = 0;
             RefreshTable();
             if (UI?.Page?.RootElement != null)
                 UI.Page.RootElement.Visibility = Visibility.Visible;
@@ -204,6 +279,13 @@ namespace DiscFaithful.UI
             visible = false;
             if (UI?.Page?.RootElement != null)
                 UI.Page.RootElement.Visibility = Visibility.Hidden;
+        }
+
+        /// <summary>Apre direttamente una pagina (0=All, 1=Single, 2=Tournament).</summary>
+        public void ShowPage(int index)
+        {
+            pageIndex = Math.Clamp(index, 0, PageTitles.Length - 1);
+            Show();
         }
     }
 }

@@ -4,16 +4,18 @@ Extracted from the original ADF → WAV (8-bit mono, 11025 Hz).
 
 | File | Original ADF | Usage | AudioManager |
 |------|--------------|-------|--------------|
-| `launch.wav` | LAUNCH.SPL | Throw disc | SndLaunch |
-| `impact.wav` | IMPACT.SPL | Bounce / hit | SndImpact |
+| `disc_launch.wav` | LAUNCH.SPL | Throw disc | SndLaunch |
+| `tile_impact.wav` | IMPACT.SPL | Bounce / hit | SndImpact |
 | `tile_destroy.wav` | DESDALLE.SPL | Tile destruction | SndDesDalle |
-| `death.wav` | MORT.SPL | Death / fall | SndMort |
+| `male_death.wav` | MMORT.SPL | Death / fall | SndMort |
+| `female_death.wav` | FMORT.SPL | Death / fall | SndMort |
 | `victory.wav` | VICTOIRE.SPL | Victory | SndVictoire |
 | `gong.wav` | GONG.SPL | Round start | SndGong |
 | `block.wav` | PARADE.SPL | Block / catch | SndParade |
-| `fall.wav` | CHUTE.SPL | Fall | — |
+| `fall_to_the_ground.wav` | CHUTEG.SPL | Fall to the ground | — |
+| `fall_into_the_void.wav` | CHUTEV.SPL | Fall into the void | — |
 | `touch_defense.wav` | TOUCHDEF.SPL | Defense touch | — |
-| `glass.wav` | VITRE15K.SPL | Glass impact | — |
+| `glass_impact.wav` | VITRE15K.SPL | Glass impact | — |
 | `dic13.wav` | DIC13.SPL | Extra | — |
 
 **Local path:** `/home/workdir/artifacts/DiscFaithful/assets/audio/`

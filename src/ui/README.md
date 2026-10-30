@@ -1,25 +1,42 @@
-# UI – stile 1990 (Amiga / DOS)
+# UI – stile contemporaneo
 
-## Regole visive
-- Niente UI moderne, flat o minimal
-- Colori terminali: verde `#00DC00`, giallo `#FFDC00`, sfondo blu scuro
-- Testo a blocchi maiuscolo
-- Navigazione pad: D-Pad + A / B
+Menu e HUD moderni: layout pulito, tipografia chiara, palette scura con accent blu.
+
+## Design
+
+| Elemento | Scelta |
+|----------|--------|
+| Sfondo | `#0C0E14` scuro semi-trasparente |
+| Card / panel | `#181C26` |
+| Testo primario | `#F5F7FA` |
+| Testo secondario | `#A0AABE` |
+| Accent | `#588CFF` |
+| Pericolo (vita bassa) | `#FF5A5A` |
+
+Niente pixel art / terminal green: look da gioco 2020+.
 
 ## Script
 
 | File | Ruolo |
 |------|--------|
-| `ModeSelectUI.cs` | Menu TRAINING / SINGLE MATCH / TOURNAMENT / CHAMPIONSHIP |
+| `ModeSelectUI.cs` | Menu Training / Single Match / Tournament / Championship |
 | `GameHud.cs` | Score, vita, livello, messaggi round |
 
-## Setup in Stride
-1. Crea Entity `UI_ModeSelect` con `UIComponent` + `ModeSelectUI`
-2. Assegna riferimento a `GameManager`
-3. Crea Entity `UI_HUD` con `UIComponent` + `GameHud`
-4. Font: usa un font pixel/monospace se disponibile (es. "Press Start" style o default mono)
+## Setup Stride
+
+1. Entity `UI_ModeSelect` → `UIComponent` + `ModeSelectUI` → collega `GameManager`
+2. Entity `UI_HUD` → `UIComponent` + `GameHud` → collega `GameManager`
+3. Font: sans-serif di sistema o un font UI moderno (es. Inter / Roboto se importato)
 
 ## Controlli menu
-- **Up / Down** – seleziona modalità
-- **A / Enter** – avvia
-- **B** – indietro (estendibile)
+
+- **↑ ↓** / D-Pad — seleziona
+- **A** / Enter — conferma
+
+## API
+
+```csharp
+modeSelect.ShowMenu();
+modeSelect.HideMenu();
+hud.ShowMessage("Custom text", 2f);
+```

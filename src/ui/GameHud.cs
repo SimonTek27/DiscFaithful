@@ -1,6 +1,5 @@
 using Stride.Core.Mathematics;
 using Stride.Engine;
-using Stride.Input;
 using Stride.UI;
 using Stride.UI.Controls;
 using Stride.UI.Panels;
@@ -8,20 +7,18 @@ using Stride.UI.Panels;
 namespace DiscFaithful.UI
 {
     /// <summary>
-    /// HUD in-game stile 1990: score, vita, livello, modalità.
-    /// Font mono / colori terminali, niente barre moderne.
+    /// HUD in-game contemporaneo: score, vita, livello, modalità.
+    /// Layout leggero in alto, messaggi centrati con fade timer.
     /// </summary>
     public class GameHud : SyncScript
     {
         public GameManager GameManager;
         public UIComponent UI;
 
-        /// <summary>Menu modalità a cui tornare alla fine della modalità (opzionale).</summary>
-        public ModeSelectUI Menu;
-
-        public Color TextColor = new Color(0, 220, 0);
-        public Color AlertColor = new Color(255, 60, 60);
-        public Color TitleColor = new Color(255, 220, 0);
+        public Color TextPrimary = new Color(245, 247, 250);
+        public Color TextSecondary = new Color(160, 170, 190);
+        public Color Accent = new Color(88, 140, 255);
+        public Color Danger = new Color(255, 90, 90);
 
         private TextBlock modeLabel;
         private TextBlock scoreLabel;
@@ -30,10 +27,6 @@ namespace DiscFaithful.UI
         private TextBlock messageLabel;
 
         private float messageTimer;
-        private bool awaitingMenuReturn;
-        private float menuPromptTimer;
-
-        private const string MenuPrompt = "PRESS  A  FOR  MENU";
 
         public override void Start()
         {
@@ -60,24 +53,34 @@ namespace DiscFaithful.UI
 
         private void BuildHud()
         {
-            if (UI == null)
-                UI = Entity.GetOrCreate<UIComponent>();
+            UI ??= Entity.GetOrCreate<UIComponent>();
 
             var root = new Canvas { Name = "HudRoot" };
             UI.Page = new UIPage { RootElement = root };
 
-            modeLabel = MakeText("MODE", 14, TitleColor);
-            scoreLabel = MakeText("P1 0 - 0 P2", 18, TextColor);
-            lifeLabel = MakeText("LIFE 5 | 5", 14, TextColor);
-            levelLabel = MakeText("LEVEL 1", 14, TextColor);
-            messageLabel = MakeText("", 20, TitleColor);
+            // Top bar background (subtle)
+            var topBar = new Border
+            {
+                BackgroundColor = new Color(12, 14, 20, 180),
+                Height = 56,
+                HorizontalAlignment = HorizontalAlignment.Stretch,
+                VerticalAlignment = VerticalAlignment.Top
+            };
+            root.Children.Add(topBar);
+            Canvas.SetRelativePosition(topBar, new Vector3(0, 0, 0));
+            Canvas.SetPinOrigin(topBar, new Vector3(0, 0, 0));
 
-            // Posizionamento stile arcade: alto
-            Place(root, modeLabel, 0.5f, 0.04f);
-            Place(root, scoreLabel, 0.5f, 0.09f);
-            Place(root, lifeLabel, 0.5f, 0.14f);
-            Place(root, levelLabel, 0.15f, 0.04f);
-            Place(root, messageLabel, 0.5f, 0.45f);
+            modeLabel = MakeText("Mode", 13, TextSecondary);
+            scoreLabel = MakeText("0  —  0", 22, TextPrimary);
+            lifeLabel = MakeText("5  ·  5", 14, TextSecondary);
+            levelLabel = MakeText("Level 1", 13, TextSecondary);
+            messageLabel = MakeText("", 28, TextPrimary);
+
+            Place(root, modeLabel, 0.12f, 0.035f);
+            Place(root, scoreLabel, 0.5f, 0.03f);
+            Place(root, lifeLabel, 0.5f, 0.065f);
+            Place(root, levelLabel, 0.88f, 0.035f);
+            Place(root, messageLabel, 0.5f, 0.42f);
         }
 
         private TextBlock MakeText(string text, float size, Color color)
@@ -104,92 +107,63 @@ namespace DiscFaithful.UI
             if (GameManager == null) return;
 
             var cfg = GameManager.Config;
-            string modeName = cfg?.DisplayName ?? "—";
-
-            modeLabel.Text = modeName;
+            modeLabel.Text = cfg?.DisplayName ?? "—";
 
             if (cfg != null && cfg.TrackScore)
-                scoreLabel.Text = $"P1  {GameManager.ScoreP1}  -  {GameManager.ScoreP2}  P2";
+                scoreLabel.Text = $"{GameManager.ScoreP1}  —  {GameManager.ScoreP2}";
             else
-                scoreLabel.Text = "TRAINING";
+                scoreLabel.Text = "Practice";
 
             int l1 = GameManager.Player1?.CurrentLife ?? 0;
             int l2 = GameManager.Player2?.CurrentLife ?? 0;
-            lifeLabel.Text = cfg != null && cfg.InfiniteLife
-                ? "LIFE  --  |  --"
-                : $"LIFE  {l1}  |  {l2}";
 
-            levelLabel.Text = $"LEVEL {GameManager.CurrentLevel}";
+            if (cfg != null && cfg.InfiniteLife)
+            {
+                lifeLabel.Text = "∞  ·  ∞";
+                lifeLabel.TextColor = TextSecondary;
+            }
+            else
+            {
+                lifeLabel.Text = $"{l1}  ·  {l2}";
+                lifeLabel.TextColor = (l1 <= 1 || l2 <= 1) ? Danger : TextSecondary;
+            }
 
-            UpdateMenuReturn();
+            levelLabel.Text = $"Level {GameManager.CurrentLevel}";
 
             if (messageTimer > 0f)
             {
                 messageTimer -= (float)Game.UpdateTime.Elapsed.TotalSeconds;
-                if (messageTimer <= 0f && !awaitingMenuReturn)
+                if (messageTimer <= 0f)
                     messageLabel.Text = "";
-            }
-        }
-
-        /// <summary>A modalità completata: dopo una pausa mostra il prompt e
-        /// riporta al menu selezione modalità con A / Enter.</summary>
-        private void UpdateMenuReturn()
-        {
-            if (!awaitingMenuReturn) return;
-
-            menuPromptTimer -= (float)Game.UpdateTime.Elapsed.TotalSeconds;
-            if (menuPromptTimer <= 0f && messageLabel.Text != MenuPrompt)
-            {
-                messageLabel.Text = MenuPrompt;
-                messageLabel.TextColor = TitleColor;
-            }
-
-            bool confirmPressed = Input.IsKeyPressed(Keys.Enter)
-                               || Input.IsKeyPressed(Keys.Space);
-
-            if (!confirmPressed)
-            {
-                var pad = Input.GamePadCount > 0 ? Input.GetGamePadByIndex(0) : default;
-                confirmPressed = pad.IsButtonPressed(GamePadButton.A);
-            }
-
-            if (confirmPressed)
-            {
-                awaitingMenuReturn = false;
-                messageLabel.Text = "";
-                Menu?.ShowMenu();
             }
         }
 
         private void OnRoundReset()
         {
-            ShowMessage("ROUND START", 1.5f);
+            ShowMessage("Round start", 1.4f);
         }
 
         private void OnMatchEnded(PlayerController winner, string reason)
         {
-            string name = winner?.Entity.Name ?? "?";
-            ShowMessage($"{name} WINS", 2.5f);
+            string name = winner?.Entity.Name ?? "Player";
+            ShowMessage($"{name} wins", 2.2f);
         }
 
         private void OnModeCompleted(GameModeType mode, PlayerController champ)
         {
-            string name = champ?.Entity.Name ?? "?";
-            ShowMessage($"CHAMPION: {name}", 4f);
-            awaitingMenuReturn = true;
-            menuPromptTimer = 3.5f;
+            string name = champ?.Entity.Name ?? "Player";
+            ShowMessage($"Champion — {name}", 3.5f);
         }
 
         private void OnModeChanged(GameModeConfig cfg)
         {
-            awaitingMenuReturn = false;
-            ShowMessage(cfg.DisplayName, 2f);
+            ShowMessage(cfg.DisplayName, 1.8f);
         }
 
         public void ShowMessage(string text, float seconds)
         {
             messageLabel.Text = text;
-            messageLabel.TextColor = TitleColor;
+            messageLabel.TextColor = TextPrimary;
             messageTimer = seconds;
         }
     }

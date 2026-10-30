@@ -19,14 +19,10 @@ namespace DiscFaithful
         public Platform Platform2;
         public Prefab DiscPrefab;
         public AudioManager Audio;
+        public HighscoreService Highscores;
 
-        /// <summary>Avversario CPU (opzionale: se null, P2 è umano).</summary>
         public AiOpponent OpponentAi;
-
-        /// <summary>Se false, la partita parte solo quando il menu seleziona una modalità.</summary>
         public bool AutoStart = true;
-
-        /// <summary>Secondi tra fine round e nuovo round (più velocemente nei tornei).</summary>
         public float RoundRestartDelay = 3f;
 
         public List<Disc> ActiveDiscs = new();
@@ -124,7 +120,6 @@ namespace DiscFaithful
                 Platform2.InitializeHits();
             }
 
-            // Difficoltà CPU scalata col livello (come nell'originale)
             OpponentAi?.SetDifficultyFromLevel(CurrentLevel);
         }
 
@@ -204,10 +199,6 @@ namespace DiscFaithful
             return disc;
         }
 
-        /// <summary>
-        /// Disco perso: caduto sotto l'arena o in volo troppo a lungo.
-        /// Viene restituito al suo ultimo proprietario (o a un giocatore vivo).
-        /// </summary>
         private void OnDiscOutOfBounds(Disc disc)
         {
             if (disc == null || RoundOver) return;
@@ -218,7 +209,6 @@ namespace DiscFaithful
 
             if (receiver == null)
             {
-                // Nessuno lo può riprendere (nessun giocatore vivo o tutti con un disco): lo rimuoviamo
                 disc.OnOutOfBounds -= OnDiscOutOfBounds;
                 disc.OnHitPlayer -= OnDiscHitPlayer;
                 disc.OnHitWallTile -= OnDiscHitWall;
@@ -300,16 +290,10 @@ namespace DiscFaithful
 
             CheckModeProgress(winner);
 
-            // Round successivo automatico (il mode completed ferma il ciclo)
             if (!ModeFinished)
                 ScheduleNextRound();
         }
 
-        /// <summary>
-        /// Auto-restart: dopo RoundRestartDelay il round riparte da solo,
-        /// a meno che nel frattempo non sia iniziato manualmente (StartRound
-        /// azzera restartScheduled, annullando il timer pendente).
-        /// </summary>
         private async void ScheduleNextRound()
         {
             if (restartScheduled || ModeFinished) return;
@@ -378,6 +362,17 @@ namespace DiscFaithful
             ModeFinished = true;
             MatchInProgress = false;
             Log.Info($"[GameManager] {Config.DisplayName} COMPLETE – Champion: {champion?.Entity.Name}");
+
+            // Highscore (non in Training)
+            if (Highscores != null && Config != null && Config.TrackScore && champion != null)
+            {
+                int score = HighscoreService.ComputeScore(this, champion);
+                string name = champion.Entity?.Name ?? "Player";
+                bool top = Highscores.TryAdd(name, Config.DisplayName, score, CurrentLevel);
+                if (top)
+                    Log.Info($"[Highscore] New entry: {name} {score} ({Config.DisplayName})");
+            }
+
             OnModeCompleted?.Invoke(Config.Mode, champion);
         }
 

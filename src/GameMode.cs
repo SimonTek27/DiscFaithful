@@ -5,16 +5,9 @@ namespace DiscFaithful
     /// </summary>
     public enum GameModeType
     {
-        /// <summary>Allenamento libero: vita infinita, reset manuale, no score.</summary>
         Training = 0,
-
-        /// <summary>Una sola partita al meglio di N round (default 3).</summary>
         SingleMatch = 1,
-
-        /// <summary>Torneo a eliminazione: avanzamento livelli, più dischi, fine a campione.</summary>
         Tournament = 2,
-
-        /// <summary>Campionato completo: serie di match, classifica, più vite/round.</summary>
         Championship = 3
     }
 
@@ -42,7 +35,7 @@ namespace DiscFaithful
                 GameModeType.Training => new GameModeConfig
                 {
                     Mode = GameModeType.Training,
-                    DisplayName = "TRAINING",
+                    DisplayName = "Training",
                     WinsToChampion = 999,
                     StartingLevel = 1,
                     MaxLevel = 8,
@@ -55,8 +48,8 @@ namespace DiscFaithful
                 GameModeType.SingleMatch => new GameModeConfig
                 {
                     Mode = GameModeType.SingleMatch,
-                    DisplayName = "SINGLE MATCH",
-                    WinsToChampion = 2,      // best of 3
+                    DisplayName = "Single Match",
+                    WinsToChampion = 2,
                     StartingLevel = 1,
                     MaxLevel = 1,
                     StartingLife = 5,
@@ -68,21 +61,21 @@ namespace DiscFaithful
                 GameModeType.Tournament => new GameModeConfig
                 {
                     Mode = GameModeType.Tournament,
-                    DisplayName = "TOURNAMENT",
+                    DisplayName = "Tournament",
                     WinsToChampion = 3,
                     StartingLevel = 1,
                     MaxLevel = 6,
                     StartingLife = 5,
                     InfiniteLife = false,
-                    AutoAdvanceLevel = true,  // dopo ogni match avanza livello
+                    AutoAdvanceLevel = true,
                     TrackScore = true,
                     AllowRestartMidMatch = false
                 },
                 GameModeType.Championship => new GameModeConfig
                 {
                     Mode = GameModeType.Championship,
-                    DisplayName = "CHAMPIONSHIP",
-                    WinsToChampion = 5,      // best of 9 feel
+                    DisplayName = "Championship",
+                    WinsToChampion = 5,
                     StartingLevel = 1,
                     MaxLevel = 8,
                     StartingLife = 6,

@@ -10,15 +10,14 @@ namespace DiscFaithful.UI
 {
     /// <summary>
     /// Menu selezione modalità – stile contemporaneo.
-    /// Layout pulito, tipografia chiara, focus states moderni.
-    /// Controlli: D-Pad / frecce, A conferma, B indietro.
+    /// Training / Single Match / Tournament / Championship / High Scores
     /// </summary>
     public class ModeSelectUI : SyncScript
     {
         public GameManager GameManager;
+        public HighscoreUI HighscorePanel;
         public UIComponent UI;
 
-        // Palette contemporanea
         public Color BgColor = new Color(12, 14, 20, 240);
         public Color CardColor = new Color(24, 28, 38, 255);
         public Color TextPrimary = new Color(245, 247, 250);
@@ -31,15 +30,8 @@ namespace DiscFaithful.UI
             "Training",
             "Single Match",
             "Tournament",
-            "Championship"
-        };
-
-        private readonly GameModeType[] modeValues =
-        {
-            GameModeType.Training,
-            GameModeType.SingleMatch,
-            GameModeType.Tournament,
-            GameModeType.Championship
+            "Championship",
+            "High Scores"
         };
 
         private readonly string[] descriptions =
@@ -47,17 +39,15 @@ namespace DiscFaithful.UI
             "Practice freely with infinite life. No score tracking.",
             "One match, best of 3 rounds.",
             "Climb levels, more discs each stage. Become the champion.",
-            "Full series — best of 5 matches, higher stakes."
+            "Full series — best of 5 matches, higher stakes.",
+            "View the top scores across all modes."
         };
 
         private int selectedIndex = 1;
         private bool menuActive = true;
 
-        private TextBlock titleText;
-        private TextBlock subtitleText;
         private TextBlock[] optionTexts;
         private TextBlock descText;
-        private TextBlock hintText;
         private Border[] optionCards;
 
         public override void Start()
@@ -74,7 +64,6 @@ namespace DiscFaithful.UI
             var root = new Canvas { Name = "ModeSelectRoot" };
             UI.Page = new UIPage { RootElement = root };
 
-            // Backdrop
             var bg = new Border
             {
                 Name = "Backdrop",
@@ -93,25 +82,23 @@ namespace DiscFaithful.UI
                 Margin = new Thickness(32)
             };
 
-            titleText = new TextBlock
+            stack.Children.Add(new TextBlock
             {
                 Text = "DISC",
                 TextSize = 42,
                 TextColor = TextPrimary,
                 HorizontalAlignment = HorizontalAlignment.Center,
                 Margin = new Thickness(0, 0, 0, 4)
-            };
-            stack.Children.Add(titleText);
+            });
 
-            subtitleText = new TextBlock
+            stack.Children.Add(new TextBlock
             {
                 Text = "Select a mode",
                 TextSize = 16,
                 TextColor = TextSecondary,
                 HorizontalAlignment = HorizontalAlignment.Center,
                 Margin = new Thickness(0, 0, 0, 28)
-            };
-            stack.Children.Add(subtitleText);
+            });
 
             optionTexts = new TextBlock[modeLabels.Length];
             optionCards = new Border[modeLabels.Length];
@@ -155,15 +142,14 @@ namespace DiscFaithful.UI
             };
             stack.Children.Add(descText);
 
-            hintText = new TextBlock
+            stack.Children.Add(new TextBlock
             {
                 Text = "↑↓ Navigate    A Confirm",
                 TextSize = 12,
                 TextColor = new Color(100, 110, 130),
                 HorizontalAlignment = HorizontalAlignment.Center,
                 Margin = new Thickness(0, 16, 0, 0)
-            };
-            stack.Children.Add(hintText);
+            });
 
             root.Children.Add(stack);
             Canvas.SetPinOrigin(stack, new Vector3(0.5f, 0.5f, 0));
@@ -202,24 +188,32 @@ namespace DiscFaithful.UI
                 bool sel = (i == selectedIndex);
                 optionTexts[i].TextColor = sel ? TextPrimary : TextSecondary;
                 optionCards[i].BackgroundColor = sel ? AccentSoft : CardColor;
-                // Accent bar feel: slightly brighter text + soft blue tint on card
             }
             descText.Text = descriptions[selectedIndex];
         }
 
         private void ConfirmSelection()
         {
+            // Ultima voce = High Scores
+            if (selectedIndex == modeLabels.Length - 1)
+            {
+                menuActive = false;
+                HideMenu();
+                HighscorePanel?.Show();
+                return;
+            }
+
             if (GameManager == null) return;
 
             menuActive = false;
             HideMenu();
 
-            switch (modeValues[selectedIndex])
+            switch (selectedIndex)
             {
-                case GameModeType.Training:     GameManager.StartTraining(); break;
-                case GameModeType.SingleMatch:  GameManager.StartSingleMatch(); break;
-                case GameModeType.Tournament:   GameManager.StartTournament(); break;
-                case GameModeType.Championship: GameManager.StartChampionship(); break;
+                case 0: GameManager.StartTraining(); break;
+                case 1: GameManager.StartSingleMatch(); break;
+                case 2: GameManager.StartTournament(); break;
+                case 3: GameManager.StartChampionship(); break;
             }
         }
 

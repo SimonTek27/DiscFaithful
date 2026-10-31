@@ -14,7 +14,8 @@ Extracted from the original ADF → WAV (8-bit mono, 11025 Hz).
 | `gong.wav` | GONG.SPL | Round start | SndGong |
 | `block.wav` | PARADE.SPL | Block / catch | SndParade |
 | `fall_to_the_ground.wav` | CHUTEG.SPL | Fall to the ground | — |
-| `fall_into_the_void.wav` | CHUTEV.SPL | Fall into the void | — |
+| `m_fall_into_the_void.wav` | MCHUTEV.SPL | Male Fall into the void | — |
+| `f_fall_into_the_void.wav` | FCHUTEV.SPL | Female Fall into the void | — |
 | `touch_defense.wav` | TOUCHDEF.SPL | Defense touch | — |
 | `glass_impact.wav` | VITRE15K.SPL | Glass impact | — |
 | `dic13.wav` | DIC13.SPL | Extra | — |

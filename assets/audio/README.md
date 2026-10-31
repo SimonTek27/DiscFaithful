@@ -4,6 +4,7 @@ Extracted from the original ADF → WAV (8-bit mono, 11025 Hz).
 
 | File | Original ADF | Usage | AudioManager |
 |------|--------------|-------|--------------|
+| `disc_maintheme.mp3` | MUSIC.SPL | Main Theme | Music |
 | `disc_launch.wav` | LAUNCH.SPL | Throw disc | SndLaunch |
 | `tile_impact.wav` | IMPACT.SPL | Bounce / hit | SndImpact |
 | `tile_destroy.wav` | DESDALLE.SPL | Tile destruction | SndDesDalle |
